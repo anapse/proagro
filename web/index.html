@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PROAGRO WEB — Empleados y Forense</title>
 <link rel="icon" type="image/png" href="assets/logo.png">
-<link rel="stylesheet" href="styles.css?v=30">
+<link rel="stylesheet" href="styles.css?v=31">
 </head>
 <body>
 <header class="top">
@@ -55,7 +55,7 @@
     </div>
     <div id="qdResult" class="qr-sec hidden">
       <h3>DNI: <span id="qdDniLabel" class="mono"></span></h3>
-      <div class="qrimgbox"><img id="qdImg" alt="QR generado"></div>
+      <div class="qrimgbox"><div id="qdImg"></div></div>
       <a id="qdDownload" class="btn primary big2 full" download>⬇ GUARDAR QR</a>
     </div>
   </section>
@@ -103,6 +103,7 @@
         <label>📷 Escanea el QR del trabajador (o foto / imagen)</label>
         <div class="row-who">
           <button id="btnQrCamera" class="btn primary">📷 ESCANEAR QR</button>
+          <button id="btnQrTake" class="btn ghost">📸 TOMAR FOTO</button>
           <button id="btnQrUpload" class="btn ghost">📁 SUBIR IMAGEN</button>
         </div>
         <input type="file" id="qrFileInput" accept="image/*" class="hidden">
@@ -137,7 +138,8 @@
       <canvas id="qrCanvas" class="hidden"></canvas>
       <div id="scanStatus" class="scanstatus"></div>
       <div class="scanbtns">
-      <button id="btnScanUpload" class="btn ghost big2">🖼️ Cargar foto</button>
+      <button id="btnScanTake" class="btn ghost big2">📸 Tomar foto</button>
+        <button id="btnScanUpload" class="btn ghost big2">🖼️ Cargar imagen</button>
       </div>
     </div>
   </div>
@@ -334,8 +336,9 @@ campos: hora/variedad/kgExportable/kgDescarte.</div>
   <div class="modal-box" id="modalBox"></div>
 </div>
 
-<script src="vendor/jsqr.min.js?v=30"></script>
-<script src="qrparser.js?v=30"></script>
-<script src="app.js?v=30"></script>
+<script src="vendor/jsqr.min.js?v=31"></script>
+<script src="vendor/qrcode.min.js"></script>
+<script src="qrparser.js?v=31"></script>
+<script src="app.js?v=31"></script>
 </body>
 </html>

@@ -13,6 +13,7 @@ const state = {
 };
 let pollTimer = null;
 let cfg = {};               // config real del servidor (puertos) vía /api/health
+let staticMode = false;        // TRUE = GitHub Pages (sin backend local)
 
 /* ---- áreas 👥 EMPLEADOS / 🔬 FORENSE ---- */
 const TABS_EMPLEADOS = [["qrdigital", "📱 QR DIGITAL"], ["qrkg", "🌾 COSECHA"], ["ranking", "🏆 RANKING"]];
@@ -66,7 +67,39 @@ function themeInit() {
   applyTheme(t === "dark" ? "dark" : "light");
 }
 
+async function apiProagroDirecta(body) {
+  // Intento de consulta DIRECTA navegador -> PROAGRO (solo GitHub Pages).
+  // PROAGRO NO envía cabeceras CORS (verificado con OPTIONS y POST real):
+  // el navegador bloquea la respuesta y esto cae en el catch -> estado "CORS".
+  try {
+    const r = await fetch("https://digital.proagro.pe/QrKgAra/ConsultarKgVista", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dni: body.dni, fechaIni: body.fechaIni, fechaFin: body.fechaFin }),
+    });
+    if (!r.ok) return { estado: "HTTP " + r.status, meta: { http_status: r.status } };
+    const raw = await r.json().catch(() => null);
+    if (!raw) return { estado: "RESPUESTA_INESPERADA", error: "JSON inesperado" };
+    const dias = (raw.dias || []).map(d => ({
+      fecha: d.fecha,
+      registros: d.registros != null ? d.registros : ((d.items || d.detalle || []).length),
+      items: (d.items || d.detalle || []).map(it => (it && typeof it === "object") ? it : {}),
+    }));
+    return { ok: true, estado: raw.encontrado ? "OK" : "SIN_DATOS",
+      consulta: { dni: body.dni, fechaIni: body.fechaIni, fechaFin: body.fechaFin },
+      resultado: { encontrado: !!raw.encontrado, nombre: raw.nombre || null, dias,
+        claves_respuesta: raw.claves_respuesta || Object.keys(raw) },
+      meta: { http_status: 200, elapsed_ms: 0, directo: true } };
+  } catch (e) {
+    return { estado: "CORS", ok: false,
+      error: "❌ CORS: PROAGRO no permite que GitHub Pages consulte el endpoint directamente. Para datos reales usa la versión local o VPS (http://IP:3792)." };
+  }
+}
 async function api(url, opts = {}) {
+  if (staticMode) {
+    if (url.indexOf("/api/consultar-kg") === 0) return apiProagroDirecta(JSON.parse((opts.body) || "{}"));
+    throw new Error("Sin backend: " + url + " solo existe en la versión local/VPS.");
+  }
   const r = await fetch(url, {
     headers: { "Content-Type": "application/json" },
     ...opts,
@@ -103,9 +136,16 @@ async function boot() {
   status("Cargando…");
   try {
     themeInit();
-    const h = await api("/api/health");
+    let h = null;
+    try { h = await api("/api/health"); } catch (e) { h = null; }
     cfg = (h && h.cfg) || {};
-    await loadProjects();
+    if (cfg.port) {
+      await loadProjects();
+    } else {
+      staticMode = true; cfg.static = true;
+      document.body.dataset.static = "1";
+      try { const ult = localStorage.getItem("pwf_dni"); if (ult) { const i = $("#dashDniInp"); if (i) i.value = ult; } } catch (e) { }
+    }
     bindEvents();
     setInterval(syncStatus, 2500);
     // Área predeterminada al abrir: 👥 EMPLEADOS → 📱 QR DIGITAL
@@ -188,28 +228,90 @@ function bindEvents() {
 }
 
 /* ============================ tabs ============================ */
-/* ---- 📱 QR DIGITAL (generador local de QR por DNI) ---- */
+/* ---- 📱 QR DIGITAL (generador 100% en el navegador, sin servidor) ---- */
 let qdBoundFlag = false;
+function qdGenerar() {
+  const dni = ($("#qdDni").value || "").trim();
+  const msg = $("#qdMsg");
+  if (!/^\d{8}$/.test(dni)) { msg.textContent = "El DNI debe tener 8 dígitos."; msg.className = "qrmsg err"; return; }
+  msg.textContent = "";
+  msg.className = "qrmsg";
+  $("#qdImg").innerHTML = "";
+  $("#qdDniLabel").textContent = dni;
+  try {
+    if (typeof QRCode === "undefined") throw new Error("librería QR no cargada");
+    new QRCode($("#qdImg"), { text: dni, width: 260, height: 260, correctLevel: QRCode.CorrectLevel.M });
+    $("#qdResult").classList.remove("hidden");
+    msg.textContent = "QR generado con el DNI " + dni + " (formato texto).";
+  } catch (e) {
+    msg.textContent = "No se pudo generar el QR: " + e.message;
+    msg.className = "qrmsg err";
+  }
+}
+function qdDescargar() {
+  const dni = ($("#qdDniLabel").textContent || "").trim();
+  if (!/^\d{8}$/.test(dni)) return;
+  const caja = $("#qdImg");
+  const canvas = caja && caja.querySelector("canvas");
+  const img = caja && caja.querySelector("img");
+  let href = "";
+  try {
+    if (canvas) href = canvas.toDataURL("image/png");
+    else if (img && img.src) href = img.src;
+  } catch (e) { /* si el canvas está contaminado no habrá descarga */ }
+  if (!href) { const m = $("#qdMsg"); if (m) { m.textContent = "No se pudo exportar el QR."; m.className = "qrmsg err"; } return; }
+  const a = $("#qdDownload");
+  a.href = href;
+  a.setAttribute("download", "qr_" + dni + ".png");
+}
 function qdBind() {
   if (qdBoundFlag) return;
   qdBoundFlag = true;
-  const gen = () => {
-    const dni = ($("#qdDni").value || "").trim();
-    const msg = $("#qdMsg");
-    if (!/^\d{8}$/.test(dni)) { msg.textContent = "El DNI debe tener 8 dígitos."; msg.className = "qrmsg err"; return; }
-    msg.textContent = "";
-    msg.className = "qrmsg";
-    const t = Date.now();
-    $("#qdDniLabel").textContent = dni;
-    $("#qdImg").src = "/api/qr-digital?dni=" + dni + "&t=" + t;
-    $("#qdDownload").href = "/api/qr-digital?dni=" + dni + "&download=1&t=" + t;
-    $("#qdDownload").setAttribute("download", "qr_" + dni + ".png");
-    $("#qdResult").classList.remove("hidden");
-  };
-  $("#btnQrGen").onclick = gen;
-  $("#qdDni").addEventListener("keydown", (e) => { if (e.key === "Enter") gen(); });
+  $("#btnQrGen").onclick = qdGenerar;
+  $("#qdDownload").onclick = qdDescargar;
+  $("#qdDni").addEventListener("keydown", (e) => { if (e.key === "Enter") qdGenerar(); });
 }
 
+function estaticoForense(name) {
+  const panel = $("#panel-" + name); if (!panel) return;
+  const t = { resumen: "Resumen", endpoints: "🔌 Endpoints", network: "🌐 Network", javascript: "📦 JavaScript",
+    signalr: "SignalR", kg: "KG Integrity", errores: "Errores", consistencia: "Consistencia",
+    snapshots: "Snapshots", hallazgos: "Hallazgos", evidencias: "Evidencias", informes: "Informes" };
+  panel.innerHTML = `<div class="qr-sec"><h2>🔬 ${t[name] || name}</h2><div class="cardbox">
+    <p><b>⚠️ Disponible en la versión local / VPS.</b></p>
+    <p>GitHub Pages sirve solo archivos estáticos (sin backend). Esta sección forense usa la base
+    local de la herramienta (Python/Flask: auditorías, inventario de endpoints con estados
+    🟢🟡🔵🔴 verificados, network, chunks, historial…) y además <b>PROAGRO no permite CORS</b>
+    para descargar/analizar sus recursos desde un navegador externo.</p>
+    <p class="small muted">Para verla con datos reales: corre la versión local (<span class="mono">run.py</span>)
+    o el VPS en <span class="mono">http://IP:3792</span>. GitHub Pages queda 100% operativo para 👥 EMPLEADOS
+    (QR DIGITAL, escáner, COSECHA) con las limitaciones CORS documentadas.</p></div></div>`;
+}
+async function cargarRanking() {
+  const panel = $("#panel-ranking"); if (!panel) return;
+  panel.innerHTML = `<div class="qr-sec"><h2>🏆 RANKING</h2><div class="cardbox" id="rkBox"><p>Consultando PROAGRO directamente…</p></div></div>`;
+  const hoy = hoyLocalISO();
+  const box = $("#rkBox");
+  try {
+    const r = await fetch("https://digital.proagro.pe/QrKgAra/ObtenerRankingVista?top=10&fechaIni=" + hoy + "&fechaFin=" + hoy,
+      { headers: { Accept: "application/json" } });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json().catch(() => null);
+    if (!j) throw new Error("respuesta no JSON");
+    const lista = j.ranking || j.datos || [];
+    if (!Array.isArray(lista) || !lista.length) { box.innerHTML = "<p>⚠️ Sin datos de ranking para hoy.</p>"; return; }
+    const n = (x) => x != null && !isNaN(Number(x)) ? Number(x).toLocaleString("es", { maximumFractionDigits: 1 }) : "—";
+    box.innerHTML = `<table class="tbl"><thead><tr><th>#</th><th>Nombre</th><th class="num">Exportable KG</th><th class="num">Descarte</th><th class="num">Total</th></tr></thead><tbody>` +
+      lista.map((r2, i) => `<tr><td>${i + 1}</td><td>${esc(r2.nombre || r2.jefe || "—")}</td>` +
+        `<td class="num">${n(r2.kgExportable ?? r2.kg_total ?? r2.kgTotal)}</td>` +
+        `<td class="num">${n(r2.kgDescarte)}</td><td class="num"><b>${n(r2.kgTotal ?? r2.kg_total)}</b></td></tr>`).join("") +
+      `</tbody></table><p class="small muted">Datos reales devueltos por el endpoint (solo lectura).</p>`;
+  } catch (e) {
+    box.innerHTML = `<p><b>❌ CORS / sin acceso desde GitHub Pages</b></p><p>El navegador no puede leer el ranking de PROAGRO
+      (el sitio no envía cabeceras CORS; verificado con peticiones reales). Esta función concreta necesita la versión
+      local o VPS: <span class="mono">http://IP:3792</span>, donde ya está 🟢 VERIFICADO (HTTP 200).</p>`;
+  }
+}
 async function loadTab(name) {
   const a = areaDeTab(name);
   if (state.area !== a) {
@@ -219,6 +321,10 @@ async function loadTab(name) {
     renderNav();
   }
   switchPanel(name);
+  if (name === "ranking") { cargarRanking(); return; }
+  if (staticMode && (name === "resumen" || name === "endpoints" || name === "network" || name === "javascript" ||
+      name === "signalr" || name === "kg" || name === "errores" || name === "consistencia" || name === "snapshots" ||
+      name === "hallazgos" || name === "evidencias" || name === "informes")) { estaticoForense(name); return; }
   if (name === "qrkg") { qrkgBind(); await qrkgRefreshHistory(); return; }
   if (name === "qrdigital") { qdBind(); return; }
   if (name === "ranking") { return; }
@@ -872,6 +978,7 @@ async function startAudit() {
 }
 
 async function syncStatus() {
+  if (staticMode) return;
   if (!state.auditRunning) return;
   try {
     const st = await api(`/api/audits/${state.auditRunning}/status`);
@@ -974,7 +1081,9 @@ function qrkgBind() {
   L("#btnQrCamera", qrStartCamera);
   L("#btnScanClose", qrCerrarCamara);
   L("#btnScanUpload", () => qrOpenFile(false));
+  L("#btnScanTake", () => qrOpenFile(true));
   L("#btnQrUpload", () => qrOpenFile(false));
+  L("#btnQrTake", () => qrOpenFile(true));
   L("#btnQrDebug", qrDebug);
   L("#metDni", () => metSw(false));
   L("#metQr", () => metSw(true));
@@ -1016,6 +1125,7 @@ function qrHideCard() {
 function qrSetDatos(dni, fecha) {
   if (/^\d{8}$/.test(dni)) {
     dashDni = dni;
+    try { localStorage.setItem("pwf_dni", dni); } catch (e) { }
     const inp = $("#dashDniInp");
     if (inp) inp.value = dni;
   }
@@ -1446,6 +1556,9 @@ function dashPctTxt(pct) {
   return (pct >= 0 ? "▲ +" : "▼ ") + (pct * 100).toFixed(1) + "%";
 }
 async function dashConsultar(dni, ini, fin) {
+  if (staticMode) {
+    return apiProagroDirecta({ dni, fechaIni: ini, fechaFin: fin });
+  }
   const resp = await fetch("/api/consultar-kg", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ dni, fechaIni: ini, fechaFin: fin }),
@@ -1457,6 +1570,7 @@ async function dashPeriodo(dni, dias) {
   // ConsultarKgVista con fechaIni..fechaFin devuelve dias[].detalle[]).
   const j = await dashConsultar(dni, dias[0], dias[dias.length - 1]);
   const m = j.meta || {};
+  if (j.estado === "CORS") return { err: j.error || "CORS", tipoErr: "consulta" };
   if (!j || j.estado === "VALIDACION") return { err: j && j.error || "DNI inválido", tipoErr: "validacion" };
   if (String(j.estado).startsWith("HTTP") || (m.http_status && m.http_status >= 400))
     return { err: "ERROR DE CONSULTA (HTTP " + (m.http_status ?? "?") + ")", tipoErr: "consulta" };
@@ -1789,6 +1903,7 @@ function qrVerRespuesta() {
 }
 
 async function qrkgRefreshHistory() {
+  if (staticMode) return;
   const box = $("#qrkg");
   try {
     const { queries } = await api("/api/kg-queries");
