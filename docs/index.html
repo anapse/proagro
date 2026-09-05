@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PROAGRO WEB — Empleados y Forense</title>
 <link rel="icon" type="image/png" href="assets/logo.png">
-<link rel="stylesheet" href="styles.css?v=32">
+<link rel="stylesheet" href="styles.css?v=33">
 </head>
 <body>
 <header class="top">
@@ -121,13 +121,18 @@
       <label>🌩️ Worker serverless — consultar PROAGRO sin VPS ni servidor</label>
       <div class="row-who">
         <input id="workerUrlInp" class="inp who-inp" placeholder="https://tu-worker.tusubdominio.workers.dev" style="flex:1;min-width:200px">
-        <button id="btnWorkerSave" class="btn ghost">💾 Guardar</button>
+        <button id="btnWorkerSave" class="btn primary">💾 Guardar</button>
+          <button id="btnWorkerTest" class="btn ghost">🧪 Probar</button>
+          <button id="btnWorkerClear" class="btn ghost">🧹 Limpiar</button>
+          <span id="workerState" class="chip"></span>
       </div>
       <p class="small muted" style="margin-top:6px">Solo lectura (cosecha/ranking). Cómo crearlo gratis: <span class="mono">GITHUB_PAGES.md</span> → Worker. Se guarda en este dispositivo.</p>
     </div>
     <div class="cosecha-periodos">
       <button id="btnDashHoy" class="btn primary big2">📅 HOY</button>
       <button id="btnDashSemana" class="btn ghost big2">🌾 ESTA SEMANA</button>
+      <input id="dashFecha" type="date" class="inp fecha-inp" title="Fecha concreta">
+      <button id="btnDashFecha" class="btn ghost big2">📅 FECHA</button>
     </div>
     <p class="small muted" style="margin:6px 2px">📅 HOY muestra el último dato disponible (de hoy o de ayer). 🌾 ESTA SEMANA va de <b>lunes</b> hasta hoy (máximo <b>sábado</b>); el domingo no se muestra.</p>
 
@@ -344,9 +349,9 @@ campos: hora/variedad/kgExportable/kgDescarte.</div>
   <div class="modal-box" id="modalBox"></div>
 </div>
 
-<script src="vendor/jsqr.min.js?v=32"></script>
+<script src="vendor/jsqr.min.js?v=33"></script>
 <script src="vendor/qrcode.min.js"></script>
-<script src="qrparser.js?v=32"></script>
-<script src="app.js?v=32"></script>
+<script src="qrparser.js?v=33"></script>
+<script src="app.js?v=33"></script>
 </body>
 </html>

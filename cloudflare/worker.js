@@ -1,90 +1,100 @@
 // PROAGRO WEB — Worker serverless mínimo (Cloudflare Workers)
-// SOLO dos endpoints de lectura validados hacia PROAGRO. Sin proxy abierto.
-// - POST /api/cosecha   -> ConsultarKgVista  {dni,fechaIni,fechaFin}
-// - GET  /api/ranking   -> ObtenerRankingVista (top, fechaIni, fechaFin)
-// Cualquier otra ruta/método/parámetro -> 404/405/400. Sin URLs arbitrarias.
+// SOLO endpoints de lectura validados hacia PROAGRO. Sin proxy abierto.
+//   GET  /             -> info
+//   GET  /health       -> {"ok":true,...}
+//   POST /api/cosecha  -> ConsultarKgVista  {dni,fechaIni,fechaFin}
+//   GET  /api/ranking  -> ObtenerRankingVista?top&fechaIni&fechaFin
+// CORS: únicamente https://anapse.github.io (+ localhost para desarrollo).
 
 const PROAGRO = "https://digital.proagro.pe";
-const RUTAS = {
-  cosecha: PROAGRO + "/QrKgAra/ConsultarKgVista",   // POST (solo lectura)
-  ranking: PROAGRO + "/QrKgAra/ObtenerRankingVista", // GET  (solo lectura)
-};
-const ORIGENES_PERMITIDOS = [
-  "https://anapse.github.io",
-];
-const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
-const MAX_DIAS = 31; // el front usa hoy/semana (<=7); margen de seguridad
+const ORIGENES = ["https://anapse.github.io"];
 
-function corsHeaders(origin) {
-  const permitido = origin && (ORIGENES_PERMITIDOS.includes(origin) ||
-    /^https:\/\/[a-z0-9-]+\.github\.io$/.test(origin) ||
-    /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin));
-  const h = {
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Max-Age": "86400",
-    "Vary": "Origin",
-    "Cache-Control": "no-store",
-    "X-Content-Type-Options": "nosniff",
-  };
-  if (permitido) h["Access-Control-Allow-Origin"] = origin;
+function corsOrigen(origin) {
+  if (!origin) return "";
+  const ok = ORIGENES.includes(origin) || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  return ok ? origin : "";
+}
+
+function cabeceras(origen) {
+  const h = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
+  if (origen) {
+    h["Access-Control-Allow-Origin"] = origen;
+    h["Vary"] = "Origin";
+    h["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS";
+    h["Access-Control-Allow-Headers"] = "Content-Type";
+    h["Access-Control-Max-Age"] = "86400";
+  }
   return h;
 }
 
-function json(body, status, origin) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
-  });
+const RE_ISO = /^\d{4}-\d{2}-\d{2}$/;
+function validaFecha(x) {
+  if (typeof x !== "string" || !RE_ISO.test(x)) return false;
+  const d = new Date(x + "T12:00:00Z");
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === x;
 }
 
-function fechaValida(v) {
-  if (typeof v !== "string" || !FECHA_RE.test(v)) return false;
-  const d = new Date(v + "T00:00:00Z");
-  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+function json(resp, status = 200, origen) {
+  return new Response(JSON.stringify(resp), { status, headers: cabeceras(origen) });
 }
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const origin = request.headers.get("Origin");
-    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    const metodo = request.method.toUpperCase();
+    const origen = corsOrigen(request.headers.get("Origin"));
+    const path = url.pathname;
 
-    // ---------- POST /api/cosecha ----------
-    if (url.pathname === "/api/cosecha") {
-      if (request.method !== "POST") return json({ error: "Solo POST" }, 405, origin);
-      let body = {};
-      try { body = await request.json(); } catch (e) { return json({ error: "JSON inválido" }, 400, origin); }
-      const dni = String(body.dni || "");
-      const ini = String(body.fechaIni || "");
-      const fin = String(body.fechaFin || "");
-      if (!/^\d{8}$/.test(dni)) return json({ error: "dni debe tener 8 dígitos" }, 400, origin);
-      if (!fechaValida(ini) || !fechaValida(fin)) return json({ error: "fechaIni/fechaFin deben ser YYYY-MM-DD" }, 400, origin);
-      const dias = (new Date(fin) - new Date(ini)) / 86400000;
-      if (dias < 0 || dias > MAX_DIAS) return json({ error: "rango inválido (máx " + MAX_DIAS + " días)" }, 400, origin);
-      const resp = await fetch(RUTAS.cosecha, {
+    if (metodo === "OPTIONS") return new Response(null, { status: 204, headers: cabeceras(origen) });
+
+    // ---- info / salud ----
+    if (metodo === "GET" && (path === "/" || path === "")) {
+      return json({ ok: true, service: "PROAGRO API Worker", rutas: ["/", "/health", "POST /api/cosecha", "GET /api/ranking"], docs: "https://github.com/anapse/proagro" }, 200, origen);
+    }
+    if (metodo === "GET" && path === "/health") {
+      return json({ ok: true, service: "PROAGRO API Worker", status: "online", timestamp: new Date().toISOString() }, 200, origen);
+    }
+
+    // ---- COSECHA (solo POST, solo lectura) ----
+    if (path === "/api/cosecha") {
+      if (metodo !== "POST") return json({ error: "Método no permitido (usa POST)" }, 405, origen);
+      let body;
+      try { body = await request.json(); } catch (e) { return json({ error: "JSON inválido" }, 400, origen); }
+      const dni = typeof body.dni === "string" ? body.dni.trim() : "";
+      const fechaIni = typeof body.fechaIni === "string" ? body.fechaIni : "";
+      const fechaFin = typeof body.fechaFin === "string" ? body.fechaFin : "";
+      if (!/^\d{8}$/.test(dni)) return json({ error: "DNI debe tener exactamente 8 dígitos" }, 400, origen);
+      if (!validaFecha(fechaIni)) return json({ error: "fechaIni debe ser YYYY-MM-DD válida" }, 400, origen);
+      if (!validaFecha(fechaFin)) return json({ error: "fechaFin debe ser YYYY-MM-DD válida" }, 400, origen);
+      if (fechaIni > fechaFin) return json({ error: "fechaIni no puede ser posterior a fechaFin" }, 400, origen);
+      const dias = (Date.parse(fechaFin) - Date.parse(fechaIni)) / 86400000;
+      if (dias > 31) return json({ error: "Rango máximo 31 días" }, 400, origen);
+
+      const resp = await fetch(PROAGRO + "/QrKgAra/ConsultarKgVista", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dni, fechaIni: ini, fechaFin: fin }),
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+        body: JSON.stringify({ dni, fechaIni, fechaFin }),
       });
       const texto = await resp.text();
-      return new Response(texto, { status: resp.status, headers: { "Content-Type": "application/json; charset=utf-8", ...corsHeaders(origin) } });
+      return new Response(texto, { status: resp.status, headers: cabeceras(origen) });
     }
 
-    // ---------- GET /api/ranking ----------
-    if (url.pathname === "/api/ranking") {
-      if (request.method !== "GET") return json({ error: "Solo GET" }, 405, origin);
-      let top = parseInt(url.searchParams.get("top") || "10", 10);
-      if (isNaN(top) || top < 1 || top > 5000) return json({ error: "top entre 1 y 5000" }, 400, origin);
-      const ini = url.searchParams.get("fechaIni") || "";
-      const fin = url.searchParams.get("fechaFin") || "";
-      if (!fechaValida(ini) || !fechaValida(fin)) return json({ error: "fechaIni/fechaFin requeridas (YYYY-MM-DD)" }, 400, origin);
-      const q = new URLSearchParams({ top: String(top), fechaIni: ini, fechaFin: fin });
-      const resp = await fetch(RUTAS.ranking + "?" + q.toString(), { headers: { Accept: "application/json" } });
+    // ---- RANKING (solo GET, solo lectura) ----
+    if (path === "/api/ranking") {
+      if (metodo !== "GET") return json({ error: "Método no permitido (usa GET)" }, 405, origen);
+      const top = parseInt(url.searchParams.get("top") || "10", 10);
+      const fechaIni = url.searchParams.get("fechaIni") || "";
+      const fechaFin = url.searchParams.get("fechaFin") || "";
+      if (!Number.isInteger(top) || top < 1 || top > 5000) return json({ error: "top debe estar entre 1 y 5000" }, 400, origen);
+      if (!validaFecha(fechaIni)) return json({ error: "fechaIni obligatoria (YYYY-MM-DD)" }, 400, origen);
+      if (!validaFecha(fechaFin)) return json({ error: "fechaFin obligatoria (YYYY-MM-DD)" }, 400, origen);
+
+      const q = new URLSearchParams({ top: String(top), fechaIni, fechaFin });
+      const resp = await fetch(PROAGRO + "/QrKgAra/ObtenerRankingVista?" + q.toString());
       const texto = await resp.text();
-      return new Response(texto, { status: resp.status, headers: { "Content-Type": "application/json; charset=utf-8", ...corsHeaders(origin) } });
+      return new Response(texto, { status: resp.status, headers: cabeceras(origen) });
     }
 
-    return json({ error: "No existe: usa /api/cosecha o /api/ranking" }, 404, origin);
+    return json({ error: "No encontrado. Rutas: /, /health, /api/cosecha, /api/ranking" }, 404, origen);
   },
 };

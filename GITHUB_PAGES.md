@@ -73,3 +73,11 @@ Código ya incluido: `cloudflare/worker.js` (+ `wrangler.toml`). Solo expone:
 Con el Worker configurado puedes **apagar la PC**: QR DIGITAL, escáner, COSECHA y
 RANKING funcionan desde el teléfono/tablet contra GitHub Pages + Worker.
 🔬 FORENSE (auditorías con base local SQLite) sigue requiriendo la versión local/VPS.
+
+## Worker desplegado — estado real (verificado 2026-09-05)
+`https://proagro-api.elherreroanapse.workers.dev` responde `/health`, `/` y
+`/api/ranking` (datos reales) **pero la versión publicada aún no tiene
+`POST /api/cosecha`** (404). Para activar COSECHA en GitHub Pages:
+1. Cloudflare Dashboard → Workers → tu Worker → **Edit code**.
+2. Pega el contenido de `cloudflare/worker.js` (de este repo) → **Deploy**.
+3. En la web: 🌾 COSECHA → caja 🌩️ → **🧪 Probar** → debe decir «✅ Worker listo».

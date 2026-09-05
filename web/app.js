@@ -1096,6 +1096,43 @@ function metSw(qr) {
   if (b1) b1.classList.toggle("hidden", qr);
   if (b2) b2.classList.toggle("hidden", !qr);
 }
+async function probarWorker() {
+  const w = (workerUrl || "").trim();
+  const st = $("#workerState");
+  if (!w) { if (st) { st.textContent = "☁️ sin URL"; st.className = "chip warn"; } return; }
+  if (st) { st.textContent = "probando…"; st.className = "chip"; }
+  const hoy = hoyLocalISO();
+  let h = false, r = false, c = "—";
+  try {
+    const hr = await fetch(w + "/health"); h = hr.ok;
+    const rr = await fetch(w + "/api/ranking?top=1&fechaIni=" + hoy + "&fechaFin=" + hoy); r = rr.ok;
+    const cr = await fetch(w + "/api/cosecha", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dni: "00000000", fechaIni: hoy, fechaFin: hoy }) });
+    c = cr.status === 404 ? "❌ falta /api/cosecha" : (cr.status === 400 || cr.ok ? "✅ ok" : "❌ HTTP " + cr.status);
+  } catch (e) { h = r = false; c = "📡 sin conexión"; }
+  const okTodo = h && r && c.indexOf("✅") === 0;
+  if (st) {
+    st.textContent = okTodo ? "✅ Worker listo" : "health " + (h ? "✅" : "❌") + " · ranking " + (r ? "✅" : "❌") + " · cosecha " + c;
+    st.className = "chip " + (okTodo ? "ok" : "warn");
+  }
+}
+
+async function dashFecha() {
+  const val = $("#dashFecha") ? $("#dashFecha").value : "";
+  const f = val || hoyLocalISO();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f) || f > hoyLocalISO()) { dashMsg("Elige una fecha válida (hoy o anterior).", true); return; }
+  const d = ($("#dashDniInp").value || dashDni || "").trim();
+  if (!/^\d{8}$/.test(d)) { dashMsg("Escribe o escanea primero el DNI (8 dígitos).", true); return; }
+  dashDni = d;
+  qrSetDatos(d, f);
+  dashMsg("Consultando FECHA " + dashFmt(f) + "…");
+  const dia = await dashPeriodo(dashDni, [f]);
+  if (dia.err) { dashMsg(dia.err, true); return; }
+  const prev = await dashPeriodo(dashDni, [dashSum(f, -1)]);
+  const base = prev && !prev.err && prev.rows.length && prev.rows[0].estado === "ok" ? { kg: prev.rows[0].kg, label: "día anterior" } : null;
+  dashRender("📅 FECHA " + dashFmt(f), dia.rows, base && base.kg, base && base.label, "dia");
+  dashMsg("Listo — FECHA " + dashFmt(f) + " con datos reales.");
+}
+
 function qrkgBind() {
   if (qrkgBoundFlag) return;
   qrkgBoundFlag = true;
@@ -1122,6 +1159,19 @@ function qrkgBind() {
   });
   L("#btnDashHoy", dashHoy);
   L("#btnDashSemana", dashSemana);
+  L("#btnDashFecha", () => dashFecha());
+  const dfIn = $("#dashFecha");
+  if (dfIn) dfIn.value = dfIn.value || hoyLocalISO();
+  L("#btnWorkerTest", () => probarWorker());
+  L("#btnWorkerClear", () => {
+    workerUrl = "";
+    try { localStorage.removeItem("pwf_worker"); } catch (e) { }
+    const wi2 = $("#workerUrlInp"); if (wi2) wi2.value = "";
+    const st2 = $("#workerState"); if (st2) { st2.textContent = ""; st2.className = "chip"; }
+    dashMsg("Configuración del Worker limpiada.");
+  });
+  const st = $("#workerState");
+  if (st) st.textContent = workerUrl ? "🌩️ " + workerUrl : "";
   L("#btnWhoAplicar", async () => {
     const d = ($("#dashDniInp").value || "").trim();
     if (!/^\d{8}$/.test(d)) { dashMsg("Escribe un DNI de 8 dígitos.", true); return; }
