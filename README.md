@@ -1,142 +1,134 @@
-# PROAGRO-WEB-FORENSICS
+# PROAGRO WEB — Empleados y Forense
 
-Herramienta **read-only** de análisis técnico/forense de la aplicación pública
-**https://digital.proagro.pe/QrKgAra/QrKgAra** (PROAGRO — digitalización de cosecha, ICA).
-Investiga indicios sobre el recorrido del dato **Kg / peso / cosecha** desde el
-navegador hasta las consultas públicas, **sin afirmar pérdida de datos sin evidencia**.
+Herramienta **local (y de VPS)** en **Python/Flask** (no usa Node.js) que combina dos
+áreas sobre la misma aplicación:
 
-Cada hallazgo se clasifica como `HECHO OBSERVADO`, `INDICIO`, `HIPÓTESIS` o
-`PRUEBA PENDIENTE`. Todo el análisis inicial es **GET / solo lectura**:
-no se envían formularios ni se modifican datos.
+- **👥 EMPLEADOS** — pantalla amigable para el trabajador (móvil/tablet/PC).
+- **🔬 FORENSE** — investigación técnica *read-only* de la web pública
+  https://digital.proagro.pe/QrKgAra/QrKgAra (PROAGRO — digitalización de cosecha, ICA).
 
-## Requisitos
-- Windows 10/11, Python 3.10+ (el proyecto trae su propio `.venv`).
-- Internet (el sitio es público).
+Todo el proyecto se sirve a sí mismo: la tablet/PC **nunca llama a PROAGRO
+directamente**, siempre pasa por esta aplicación (servidor local en `0.0.0.0:3792`).
 
-## Instalación (una sola vez)
-```bat
-cd %USERPROFILE%\Desktop\PROAGRO-WEB-FORENSICS
-python -m venv .venv
-.venv\Scripts\python -m pip install -r requirements.txt
-.venv\Scripts\python -m playwright install chromium
+---
+
+## 👥 EMPLEADOS (parte amigable)
+
+### 📱 QR DIGITAL
+Genera un QR con el DNI del trabajador (no es lector): ingresa el DNI → botón
+**🔲 QR DIGITAL** → QR grande → **⬇ GUARDAR QR** (PNG). Pantalla centrada y simple.
+
+### 🌾 COSECHA (antes «QR → KG») — «MI COSECHA»
+Seguimiento real de la cosecha con **datos del endpoint real** (solo lectura):
+
+1. Elige método (pestañas): **📷 QR** (escanear con cámara, subir imagen) o **👤 DNI**.
+   Al detectar/escribir el DNI se muestra **HOY** automáticamente.
+2. Períodos: **📅 HOY** y **🌾 ESTA SEMANA** (una línea):
+   - **HOY** muestra el último dato disponible: si hoy ya tiene registros los muestra;
+     si no, muestra **los de ayer** indicándolo («datos de AYER (dd/mm)»).
+   - **ESTA SEMANA** va de **lunes a hoy** (máximo sábado); **el domingo nunca se muestra**.
+3. Gráfica de barras grande (un día por barra), con valor KG, día completo
+   (Lunes…Sábado), fecha y **carita** 😊😐😞 calculada comparando cada día con el
+   anterior de la semana (desde el lunes; nada de "semana anterior").
+4. Tarjetas: **🌾 TOTAL** y **📊 PROMEDIO DIARIO** — calculados **solo con los días
+   que tienen datos**; un día sin datos muestra **⚠️ NO HAY DATOS** (nunca 0 KG) y no
+   entra en el promedio.
+5. Mensaje de rendimiento dinámico (😊 ¡Excelente! / 😐 estable / 😞 disminuyó) con
+   la variación real (⬆️/⬇️ %).
+6. **⚖️ Detalle de pesos — por registro/hora**: aparece abajo siempre (en HOY y en
+   ESTA SEMANA), con **botones por cada día** del período (por defecto el último con
+   datos). Muestra **un día a la vez**: hora · KG · barra horizontal · ▲/▼ %
+   comparado con el registro anterior de ese día · carita grande.
+
+Endpoint real usado (documentado por FORENSE, no inventado):
+`POST /QrKgAra/ConsultarKgVista` con `{"dni","fechaIni","fechaFin"}` (formato
+`YYYY-MM-DD`); responde `{encontrado, dias[].detalle[]}` con
+hora/variedad/kgExportable/kgDescarte. Sonido 🔊 (beep) + voz al detectar QR.
+
+### 🏆 RANKING
+Pestaña preparada para su implementación; la referencia técnica ya vive en FORENSE
+(`GET /QrKgAra/ObtenerRankingVista`, 🟢 VERIFICADO).
+
+---
+
+## 🔬 FORENSE (parte técnica)
+
+Auditorías automáticas **read-only** de la web pública. Cada hallazgo se clasifica
+`HECHO OBSERVADO / INDICIO / HIPÓTESIS / PRUEBA PENDIENTE` (nunca se presenta una
+inferencia como un hecho). Pestañas:
+
+- **Resumen** (contadores coherentes con el inventario) · **🔌 Endpoints** ·
+  Network · JavaScript/Chunks · SignalR · KG Integrity · Errores · Consistencia ·
+  Snapshots · Hallazgos · Evidencias · Informes.
+- **🔌 ENDPOINTS ENCONTRADOS**: inventario con estado forense
+  🟢 VERIFICADO / 🟡 ENCONTRADO EN CÓDIGO / 🔵 REFERENCIADO / 🔴 ERROR, método,
+  función JS que lo usa, parámetros reales del código, archivo/línea, respuesta
+  esperada, HTTP y fecha. Incluye: buscador, filtros (GET/POST/estado/QR/KG/DNI/…),
+  **📥 exportar JSON/CSV**, secciones 🧩 FUNCIONES→ENDPOINTS, 📄 FORMULARIOS,
+  📷 QR (librerías cargadas vs usadas), 📊 CAMPOS detectados, 🗺️ MAPA de la web.
+- Historial local de consultas KG y el documento del endpoint viven aquí (no en
+  EMPLEADOS).
+
+El análisis descarga HTML + **todos** los JS/bundles públicos (SHA-256), busca
+patrones (ajax/fetch/axios/URLs/SignalR/WebSocket), construye el mapa de endpoints
+**sin inventar nada**, prueba solo endpoints de lectura (`Obtener/Consultar/Buscar…`)
+y genera informe `HTML + JSON + PDF`.
+
+---
+
+## Arquitectura
+
 ```
+TABLET / PC (navegador)
+        │  http://IP-local:3792
+        ▼
+PROAGRO WEB (Flask, 0.0.0.0:3792)   ← esta aplicación
+        │  POST /api/consultar-kg (proxy, solo lectura)
+        ▼
+digital.proagro.pe  ConsultarKgVista / ObtenerRankingVista
+        ▼
+JSON real → gráfica/tarjetas/detalle en EMPLEADOS · inventario en FORENSE
+```
+
+## Requisitos e instalación
+- Python 3.11+ (Windows o Linux), internet para el sitio público.
+```bash
+python -m venv .venv
+.venv/Scripts/python -m pip install -r requirements.txt   # Linux: .venv/bin/python
+```
+(opcional, solo auditorías con navegador) `.venv/Scripts/python -m playwright install chromium`
 
 ## Ejecutar
-```bat
-.venv\Scripts\python run.py            :: abre http://127.0.0.1:3792
-.venv\Scripts\python run.py --port 3800
+```bash
+.venv/Scripts/python run.py           # HTTP 0.0.0.0:3792
+PORT=3800 .venv/Scripts/python run.py # otro puerto (env PORT)
 ```
-El servidor escucha en **0.0.0.0**, de modo que la MISMA aplicación se abre desde
-otros dispositivos de la red local:
+- Config centralizada por entorno (`PORT`=3792, `HOST`=0.0.0.0, `HTTPS_PORT`=0).
+  Si el puerto está ocupado avisa y no cambia solo.
+- La consola detecta la IP LAN y muestra las URLs para la tablet.
+- **Firewall (solo red privada):** `ABRIR_PUERTO_3792.bat` como administrador
+  (TCP 3792, perfil *privado* únicamente).
 
-```
-PC:     http://127.0.0.1:3792/
-TABLET: http://192.168.1.4:3792/      <- IP real de esta PC (misma Wi-Fi)
-```
+### Cámara desde la tablet (HTTPS opcional)
+La cámara del navegador exige contexto seguro. Si la necesitas, activa HTTPS:
+`HTTPS_PORT=3793 .venv/Scripts/python run.py` (certificado autogenerado en `tls/`;
+primera visita: Avanzado → Continuar). Sin HTTPS, COSECHA sigue funcionando con
+👤 DNI y 📁 SUBIR IMAGEN.
 
-Al iniciar, la consola detecta automáticamente las IP IPv4 de la PC y muestra las
-URLs para la tablet. Para que la tablet pueda entrar:
+## VPS / producción
+- Windows: `INICIAR_PROAGRO_VPS.bat` (primer plano) o `INSTALAR_SERVICIO_VPS.bat`
+  (tarea del sistema, arranca sola, log persistente `proagro.log`).
+- Linux: `chmod +x start-proagro.sh && ./start-proagro.sh`.
+- Guía completa: `README_VPS.md`.
 
-1. **Firewall (solo red privada):** ejecuta como administrador
-   `ABRIR_PUERTO_3792.bat` (crea las reglas TCP 3792/3792 → perfil *privado* únicamente).
-   Alternativa manual: Panel → Firewall → Configuración avanzada → Reglas de
-   entrada → Nueva regla → Puerto → TCP 3792/3792 → Permitir → marcar SOLO Privada.
-2. La tablet debe estar en la **misma Wi-Fi** y abrir `http://IP-DE-LA-PC:3792`.
-3. Si no carga: desactiva el *aislamiento AP/cliente* en el router Wi-Fi.
-
-El dashboard incluye la pestaña **📷 QR → KG** (lector QR con cámara/foto +
-consulta real a PROAGRO); para la cámara desde la tablet se necesita el
-**HTTPS local** de abajo.
-
-### HTTPS local (cámara desde la tablet)
-El servidor arranca en **HTTP :PORT** (env `PORT`, por defecto **3792**) y **HTTPS :PORT+1** (env `HTTPS_PORT`, por defecto **3792**):
-- PC: `http://127.0.0.1:3792` (HTTPS solo si `HTTPS_PORT` se activa)
-- Tablet: `http://IP-PC:3792` (sin cámara); con `HTTPS_PORT=3793` activo, `https://IP-PC:3793` (cámara ✅)
-- Certificado autogenerado en `tls/cert.pem` + `tls/key.pem` (clave privada LOCAL;
-  no compartir). Regenerar si cambia la IP: `.venv\Scripts\python tools\crear_certificado_https.py`
-- En la tablet, la 1ª vez: Chrome → "Avanzado" → "Continuar a IP-PC (no seguro)".
-- Firewall: `ABRIR_PUERTO_3792.bat` como administrador (puertos 3792 y 3792,
-  solo perfil privado). La red Wi-Fi debe estar como "Privada".
-Pasos recomendados en el dashboard:
-1. **[＋ NUEVA AUDITORÍA]** — crea el proyecto `PROAGRO` con la URL (o edítala).
-2. **[▶ ANALIZAR]** — opciones: captura con Chromium, rango de fechas, nº de
-   consultas de consistencia. El análisis tarda ~1 min y es read-only.
-3. Revisa las pestañas (Network, Endpoints, JavaScript, SignalR, KG Integrity,
-   Errores, Consistencia, Snapshots, Hallazgos, Evidencias, Informes).
-4. **[⬇ INFORME]** — genera `HTML + JSON + PDF` (PDF vía Chromium headless).
-
-### Pestaña 📷 QR → KG (desde la PC o la tablet)
-1. **[📷 ESCANEAR QR]** abre la cámara (usa la trasera en tablet) y detecta el QR
-   automáticamente con jsQR (servido local). Alternativas: **[📸 Tomar foto]** o
-   **[📁 Subir imagen]** (funcionan aunque el navegador bloquee la cámara por HTTP).
-2. El parser flexible extrae DNI/fecha/lote/variedad/cuadrilla/grupo… del contenido
-   (texto plano o JSON) y deja confirmar DNI y fecha.
-3. **[🔎 BUSCAR KG]** llama al servidor local, que consulta el endpoint REAL
-   documentado `POST /QrKgAra/ConsultarKgVista` con
-   `{"dni","fechaIni","fechaFin"}` (solo lectura; la tablet nunca llama a PROAGRO).
-4. Muestra nombre, kgExportable/kgDescarte/kgTotal, detalle por día, y
-   **[🔬 VER RESPUESTA DEL ENDPOINT]** con la respuesta cruda guardada en
-   `data/kg_queries/` (SHA-256). Historial local en SQLite (`kg_queries`).
-
-Botones de consulta rápida (dentro de QR → KG, base = fecha seleccionada):
-**📅 DÍA ANTERIOR**, **📅 3 DÍAS ANTERIORES**, **📅 SEMANA ANTERIOR (7 DÍAS)**:
-cada uno hace UNA consulta de rango real (`fechaIni`/`fechaFin`) y dibuja una
-tarjeta **por día** bajo su botón (✅ con KG / ⚠️ NO HAY DATOS / ❌ error HTTP /
-🌐 error de conexión, diferenciados; los días sin datos no se ocultan) más el
-TOTAL DEL PERÍODO sumando solo los KG devueltos. Sonido de confirmación al
-escanear el QR (🔊 beep + voz "QR detectado" si el navegador la permite) y tonos
-distintos al obtener datos / sin datos / error — nunca repetidos en bucle.
-
-También por línea de comandos (sin servidor):
-```bat
-.venv\Scripts\python tools\run_audit_cli.py --browser
-.venv\Scripts\python tools\cleanup_audit.py <audit_id>
-.venv\Scripts\python -m unittest discover -s tests        :: tests offline
+## Pruebas
+```bash
+.venv/Scripts/python -m unittest discover -s tests          # 17 tests offline
+.venv/Scripts/python tools/verificar_maestro.py http://127.0.0.1:3792/   # checklist 26 pts
 ```
 
-## Qué hace cada auditoría
-1. Descarga el HTML principal (headers + SHA-256) y analiza recursos/formularios.
-2. Descarga **todos** los JS públicos (a `snapshots/<ts>/javascript/` y
-   `evidence/javascript/` con SHA-256).
-3. Escanea bundles: llamadas AJAX/fetch/axios, URLs, keywords KG
-   (kg, peso, cosecha, trabajador, DNI, lote, variedad, ranking…), SignalR/WebSocket.
-4. Construye el **mapa de endpoints** clasificados
-   `OBSERVADO / REFERENCIADO / POSIBLE` (nunca inventa endpoints).
-5. Sonda **solo endpoints de lectura** (`Obtener/Consultar/Buscar/Listar/Ver…`)
-   con GET normales; **nunca** toca acciones de escritura.
-6. Consulta pública `ObtenerRankingVista` (top, fechaIni, fechaFin, lotes, variedades).
-7. Ventanas de fechas + **consistencia** (N consultas idénticas → compara SHA-256,
-   nº de registros y sumas de kg).
-8. Errores HTTP, HTTP-200-con-error-JSON y errores JS de consola (modo navegador).
-9. Patrones de **posible fallo silencioso** (POSSIBLE_SILENT_FAILURE): catch vacío,
-   fetch sin `response.ok`, $.ajax sin handler error, etc.
-10. **KG-INTEGRITY**: mapa Pantalla → función → request → endpoint → respuesta.
-11. Snapshot completo con manifiesto SHA-256 + comparación con la auditoría anterior.
-12. Informe `PROAGRO_WEB_FORENSICS_<fecha>.html|json|pdf`.
-
-## Estructura
-```
-PROAGRO-WEB-FORENSICS/
-├── run.py                     # dashboard (Flask) en http://0.0.0.0:PORT (3792)
-├── forensics/                 # paquete: db (SQLite), audit (orquestador),
-│   ├── engine/                #   http, html_analyzer, js_scanner, endpoints,
-│   │                          #   network_probe, silent, signalr, kg, browser
-│   ├── report.py              # informes HTML/JSON/PDF
-│   └── app.py                 # API JSON del dashboard
-├── web/                       # frontend (pestañas)
-├── tools/                     # run_audit_cli.py, cleanup_audit.py
-├── tests/                     # unittest (offline)
-├── data/forensics.db          # SQLite
-├── evidence/javascript/       # copia persistente de los JS
-├── snapshots/<YYYY-MM-DD_HH-MM-SS>/   # html/ javascript/ responses/ headers/
-│                                     # network/ logs/ analysis/ + manifest.json
-└── reports/PROAGRO_WEB_FORENSICS_*.{html,json,pdf}
-```
-
-## Alcance y limitaciones (importante)
-- Sin acceso al servidor/BD/credenciales: solo lo observable por HTTP público.
-- No se ejecutan POST/PUT/PATCH/DELETE; no se registra, modifica ni borra nada.
-- La prueba de **concurrencia** es opcional (1–20 GET) y solo con clic explícito.
-- «Consultar mi Kg» usa POST JSON con DNI: requiere autorización; el análisis
-  documenta el flujo pero **no lo ejecuta**.
-- Los cambios entre consultas pueden deberse a actividad legítima en curso.
+## Seguridad y alcance
+- **Solo lectura**: nunca POST/PUT/PATCH/DELETE contra PROAGRO; sin credenciales.
+- Sin secretos en el repo (`.gitignore` excluye `data/`, `snapshots/`, `reports/`,
+  `evidence/`, `tls/`, `.env`, logs — contienen datos personales/clave privada).
+- Sin acceso al servidor/BD de PROAGRO: solo lo observable por HTTP público.
