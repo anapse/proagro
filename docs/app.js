@@ -17,6 +17,18 @@ let staticMode = false;
 const DEFAULT_WORKER = "https://proagro-api.elherreroanapse.workers.dev"; // 🌩️ Worker serverless (PROAGRO)
 let workerUrl = "";
 try { workerUrl = (localStorage.getItem("pwf_worker") || "").trim() || DEFAULT_WORKER; } catch (e) { workerUrl = DEFAULT_WORKER; }
+let cacheNombres = {};
+try { cacheNombres = JSON.parse(localStorage.getItem("pwf_nombres") || "{}") || {}; } catch (e) { }
+function nombreDeDni(dni) { return (dni && cacheNombres[dni]) || ""; }
+function alistaNombre(dni, nombre) {
+  const n = String(nombre || "").trim();
+  if (/^\d{8}$/.test(String(dni || "")) && n) { cacheNombres[dni] = n; try { localStorage.setItem("pwf_nombres", JSON.stringify(cacheNombres)); } catch (e) { } renderTagNombre(); }
+}
+function renderTagNombre() {
+  const tag = $("#dashDniTag"); if (!tag) return;
+  const n = nombreDeDni(dashDni);
+  tag.textContent = n ? "👤 " + n + "  ·  DNI " + (dashDni || "—") : "DNI: " + (dashDni || "—");
+}
 
 /* ---- áreas 👥 EMPLEADOS / 🔬 FORENSE ---- */
 const TABS_EMPLEADOS = [["qrdigital", "📱 QR DIGITAL"], ["qrkg", "🌾 COSECHA"], ["ranking", "🏆 RANKING"]];
@@ -1640,20 +1652,25 @@ function dashPctTxt(pct) {
   return (pct >= 0 ? "▲ +" : "▼ ") + (pct * 100).toFixed(1) + "%";
 }
 async function dashConsultar(dni, ini, fin) {
+  let j;
   if (staticMode) {
-    return apiProagroDirecta({ dni, fechaIni: ini, fechaFin: fin });
+    j = await apiProagroDirecta({ dni, fechaIni: ini, fechaFin: fin });
+  } else {
+    const resp = await fetch("/api/consultar-kg", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dni, fechaIni: ini, fechaFin: fin }),
+    });
+    j = await resp.json().catch(() => ({}));
   }
-  const resp = await fetch("/api/consultar-kg", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ dni, fechaIni: ini, fechaFin: fin }),
-  });
-  return resp.json().catch(() => ({}));
+  if (j && j.resultado && j.resultado.nombre) alistaNombre(dni, j.resultado.nombre);
+  return j;
 }
 async function dashPeriodo(dni, dias) {
   // dias: lista ISO asc. Una consulta por rango (así lo hace PROAGRO:
   // ConsultarKgVista con fechaIni..fechaFin devuelve dias[].detalle[]).
   const j = await dashConsultar(dni, dias[0], dias[dias.length - 1]);
   const m = j.meta || {};
+  if (j && j.resultado && j.resultado.nombre) alistaNombre(dni, j.resultado.nombre);
   if (j.estado === "CORS" || j.estado === "WORKER") return { err: j.error || "CORS", tipoErr: "consulta" };
   if (!j || j.estado === "VALIDACION") return { err: j && j.error || "DNI inválido", tipoErr: "validacion" };
   if (String(j.estado).startsWith("HTTP") || (m.http_status && m.http_status >= 400))
@@ -1806,7 +1823,7 @@ function dashRender(titulo, filas, base, baseLabel, modo, diasTodo) {
   if (nDatos > 0) detalle = dashDetallePaginado(diasDetalle);
   window._dashUltimo = { titulo, filas, base, baseLabel, modo, diasTodo };
   box.innerHTML = `<div class="dash-titulo"><h3>${esc(titulo)}</h3>
-    <span class="small muted">${desde} → ${hasta} · DNI ${esc(dashDni)} · consulta solo lectura</span></div>
+    <span class="small muted">${desde} → ${hasta} · ${(function(){ const n = nombreDeDni(dashDni); return n ? "👤 " + esc(n) + "  ·  " : ""; })()}DNI ${esc(dashDni)} · consulta solo lectura</span></div>
     <div class="dash-grid">
       <div class="dash-chart-card"><div class="bchart">${cols}</div></div>
       <div class="dash-side">${side}</div>
@@ -1873,8 +1890,7 @@ function dashSyncDni() {
   if (/^\d{8}$/.test(hero)) dashDni = hero;
   const inp = $("#dashDniInp");
   if (inp && /^\d{8}$/.test(dashDni)) inp.value = dashDni;
-  const tag = $("#dashDniTag");
-  if (tag) tag.textContent = "DNI: " + (dashDni || "—");
+  renderTagNombre();
 }
 function cosechaSub(tab) {
   const esQr = tab === "qr";
