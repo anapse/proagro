@@ -122,7 +122,7 @@ async function loadProjects() {
     `<option value="${p.id}">${esc(p.name)}</option>`).join("");
   state.curProject = projects[0] || null;
   if (state.curProject) {
-    $("#hdUrl").textContent = state.curProject.url;
+    const hdU = $("#hdUrl"); if (hdU) hdU.textContent = state.curProject.url;
     await loadAudits();
   }
 }
@@ -159,7 +159,7 @@ function bindEvents() {
   $("#selProject").onchange = async (e) => {
     state.curProject = state.projects.find(p => p.id == e.target.value);
     state.curAudit = null;
-    $("#hdUrl").textContent = state.curProject.url;
+    const hdU = $("#hdUrl"); if (hdU) hdU.textContent = state.curProject.url;
     await loadAudits();
   };
   $("#selAudit").onchange = async (e) => {
