@@ -1,0 +1,25 @@
+# Datos y evidencia local (NO subir: contienen datos personales de trabajadores)
+data/
+snapshots/
+reports/
+backups/
+evidence/
+kg_queries/
+
+# Secretos y certificados
+tls/
+.env
+*.pem
+*.key
+
+# Entorno y temporales
+.venv/
+__pycache__/
+*.pyc
+*.log
+nohup.out
+*.pid
+
+# Sistema
+Thumbs.db
+.DS_Store
