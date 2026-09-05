@@ -39,3 +39,14 @@ PROAGRO; sin backend, entra en modo estático automáticamente.
 ## Sin secretos
 GitHub Pages es público: en `web/` solo hay código y assets (logo, fondo, jsQR,
 qrcode). Nada de claves, credenciales ni datos de trabajadores (ver `.gitignore`).
+
+## Mecanismo actual (en producción)
+Publicado desde la **rama `main`, carpeta `docs/`** (copia del frontend `web/`),
+porque la cuenta GitHub tiene **Actions bloqueado por facturación**
+(«account is locked due to a billing issue»). Para actualizar la web publicada:
+```bash
+rm -rf docs && mkdir docs && cp -R web/. docs/
+git add -A && git commit -m "docs: sync web" && git push
+```
+Cuando la facturación se resuelva, el workflow `.github/workflows/deploy.yml`
+publicará automáticamente `web/` en cada push (sin `docs/`).
