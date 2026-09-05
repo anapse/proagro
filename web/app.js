@@ -13,7 +13,9 @@ const state = {
 };
 let pollTimer = null;
 let cfg = {};               // config real del servidor (puertos) vía /api/health
-let staticMode = false;        // TRUE = GitHub Pages (sin backend local)
+let staticMode = false;
+let workerUrl = "";
+try { workerUrl = localStorage.getItem("pwf_worker") || ""; } catch (e) { }        // TRUE = GitHub Pages (sin backend local)
 
 /* ---- áreas 👥 EMPLEADOS / 🔬 FORENSE ---- */
 const TABS_EMPLEADOS = [["qrdigital", "📱 QR DIGITAL"], ["qrkg", "🌾 COSECHA"], ["ranking", "🏆 RANKING"]];
@@ -67,10 +69,38 @@ function themeInit() {
   applyTheme(t === "dark" ? "dark" : "light");
 }
 
+function normalizarRespuesta(raw, body) {
+  const dias = (raw.dias || []).map(d => ({
+    fecha: d.fecha,
+    registros: d.registros != null ? d.registros : ((d.items || d.detalle || []).length),
+    items: (d.items || d.detalle || []).map(it => (it && typeof it === "object") ? it : {}),
+  }));
+  return { ok: true, estado: raw.encontrado ? "OK" : "SIN_DATOS",
+    consulta: { dni: body.dni, fechaIni: body.fechaIni, fechaFin: body.fechaFin },
+    resultado: { encontrado: !!raw.encontrado, nombre: raw.nombre || null, dias,
+      claves_respuesta: raw.claves_respuesta || Object.keys(raw) },
+    meta: { http_status: 200, elapsed_ms: 0, via: raw.via || "worker" } };
+}
 async function apiProagroDirecta(body) {
-  // Intento de consulta DIRECTA navegador -> PROAGRO (solo GitHub Pages).
-  // PROAGRO NO envía cabeceras CORS (verificado con OPTIONS y POST real):
-  // el navegador bloquea la respuesta y esto cae en el catch -> estado "CORS".
+  // 1) Si hay Worker configurado (serverless): GitHub Pages -> Worker -> PROAGRO.
+  const wu = workerUrl.trim();
+  if (wu) {
+    try {
+      const r = await fetch(wu.replace(/\/$/, "") + "/api/cosecha", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dni: body.dni, fechaIni: body.fechaIni, fechaFin: body.fechaFin }),
+      });
+      if (!r.ok) return { estado: "HTTP " + r.status, meta: { http_status: r.status } };
+      const raw = await r.json().catch(() => null);
+      if (!raw) return { estado: "RESPUESTA_INESPERADA", error: "JSON inesperado del Worker" };
+      raw.via = "worker";
+      return normalizarRespuesta(raw, body);
+    } catch (e) {
+      return { estado: "WORKER", ok: false,
+        error: "🌩️ No se pudo contactar el Worker (" + wu + "). Revisa que esté desplegado o la URL guardada." };
+    }
+  }
+  // 2) Sin Worker: intento DIRECTA navegador -> PROAGRO (bloqueado por CORS; documentado).
   try {
     const r = await fetch("https://digital.proagro.pe/QrKgAra/ConsultarKgVista", {
       method: "POST",
@@ -80,19 +110,11 @@ async function apiProagroDirecta(body) {
     if (!r.ok) return { estado: "HTTP " + r.status, meta: { http_status: r.status } };
     const raw = await r.json().catch(() => null);
     if (!raw) return { estado: "RESPUESTA_INESPERADA", error: "JSON inesperado" };
-    const dias = (raw.dias || []).map(d => ({
-      fecha: d.fecha,
-      registros: d.registros != null ? d.registros : ((d.items || d.detalle || []).length),
-      items: (d.items || d.detalle || []).map(it => (it && typeof it === "object") ? it : {}),
-    }));
-    return { ok: true, estado: raw.encontrado ? "OK" : "SIN_DATOS",
-      consulta: { dni: body.dni, fechaIni: body.fechaIni, fechaFin: body.fechaFin },
-      resultado: { encontrado: !!raw.encontrado, nombre: raw.nombre || null, dias,
-        claves_respuesta: raw.claves_respuesta || Object.keys(raw) },
-      meta: { http_status: 200, elapsed_ms: 0, directo: true } };
+    raw.via = "directo";
+    return normalizarRespuesta(raw, body);
   } catch (e) {
     return { estado: "CORS", ok: false,
-      error: "❌ CORS: PROAGRO no permite que GitHub Pages consulte el endpoint directamente. Para datos reales usa la versión local o VPS (http://IP:3792)." };
+      error: "❌ CORS: PROAGRO no permite consulta directa desde GitHub Pages. Configura arriba el Worker serverless gratuito (o usa la versión local) para datos reales." };
   }
 }
 async function api(url, opts = {}) {
@@ -293,7 +315,8 @@ async function cargarRanking() {
   const hoy = hoyLocalISO();
   const box = $("#rkBox");
   try {
-    const r = await fetch("https://digital.proagro.pe/QrKgAra/ObtenerRankingVista?top=10&fechaIni=" + hoy + "&fechaFin=" + hoy,
+    const base = workerUrl.trim() ? workerUrl.trim().replace(/\/$/, "") + "/api/ranking" : "https://digital.proagro.pe/QrKgAra/ObtenerRankingVista";
+    const r = await fetch(base + "?top=10&fechaIni=" + hoy + "&fechaFin=" + hoy,
       { headers: { Accept: "application/json" } });
     if (!r.ok) throw new Error("HTTP " + r.status);
     const j = await r.json().catch(() => null);
@@ -307,9 +330,8 @@ async function cargarRanking() {
         `<td class="num">${n(r2.kgDescarte)}</td><td class="num"><b>${n(r2.kgTotal ?? r2.kg_total)}</b></td></tr>`).join("") +
       `</tbody></table><p class="small muted">Datos reales devueltos por el endpoint (solo lectura).</p>`;
   } catch (e) {
-    box.innerHTML = `<p><b>❌ CORS / sin acceso desde GitHub Pages</b></p><p>El navegador no puede leer el ranking de PROAGRO
-      (el sitio no envía cabeceras CORS; verificado con peticiones reales). Esta función concreta necesita la versión
-      local o VPS: <span class="mono">http://IP:3792</span>, donde ya está 🟢 VERIFICADO (HTTP 200).</p>`;
+    box.innerHTML = `<p><b>❌ Sin acceso directo desde GitHub Pages</b></p><p>PROAGRO no envía cabeceras CORS. Configura el
+      Worker serverless gratuito en 🌾 COSECHA (caja 🌩️) para consultar el ranking con datos reales desde aquí.</p>`;
   }
 }
 async function loadTab(name) {
@@ -1087,6 +1109,17 @@ function qrkgBind() {
   L("#btnQrDebug", qrDebug);
   L("#metDni", () => metSw(false));
   L("#metQr", () => metSw(true));
+  const wc = $("#workerCfg");
+  if (wc) wc.classList.toggle("hidden", !staticMode);
+  const wi = $("#workerUrlInp");
+  if (wi) wi.value = workerUrl;
+  L("#btnWorkerSave", () => {
+    const v = ($("#workerUrlInp").value || "").trim();
+    workerUrl = v;
+    try { if (v) localStorage.setItem("pwf_worker", v); else localStorage.removeItem("pwf_worker"); } catch (e) { }
+    const m = $("#dashMsg");
+    if (m) { m.textContent = v ? "Worker guardado (" + v + "). Pulsa 📅 HOY o 🌾 ESTA SEMANA." : "Worker quitado: las consultas a PROAGRO usarán el intento directo (CORS)."; m.className = "qrmsg"; }
+  });
   L("#btnDashHoy", dashHoy);
   L("#btnDashSemana", dashSemana);
   L("#btnWhoAplicar", async () => {
@@ -1570,7 +1603,7 @@ async function dashPeriodo(dni, dias) {
   // ConsultarKgVista con fechaIni..fechaFin devuelve dias[].detalle[]).
   const j = await dashConsultar(dni, dias[0], dias[dias.length - 1]);
   const m = j.meta || {};
-  if (j.estado === "CORS") return { err: j.error || "CORS", tipoErr: "consulta" };
+  if (j.estado === "CORS" || j.estado === "WORKER") return { err: j.error || "CORS", tipoErr: "consulta" };
   if (!j || j.estado === "VALIDACION") return { err: j && j.error || "DNI inválido", tipoErr: "validacion" };
   if (String(j.estado).startsWith("HTTP") || (m.http_status && m.http_status >= 400))
     return { err: "ERROR DE CONSULTA (HTTP " + (m.http_status ?? "?") + ")", tipoErr: "consulta" };

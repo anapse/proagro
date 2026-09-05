@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PROAGRO WEB — Empleados y Forense</title>
 <link rel="icon" type="image/png" href="assets/logo.png">
-<link rel="stylesheet" href="styles.css?v=31">
+<link rel="stylesheet" href="styles.css?v=32">
 </head>
 <body>
 <header class="top">
@@ -117,6 +117,14 @@
       </div>
     </div>
 
+    <div id="workerCfg" class="cardbox hidden" style="margin:10px 0 2px">
+      <label>🌩️ Worker serverless — consultar PROAGRO sin VPS ni servidor</label>
+      <div class="row-who">
+        <input id="workerUrlInp" class="inp who-inp" placeholder="https://tu-worker.tusubdominio.workers.dev" style="flex:1;min-width:200px">
+        <button id="btnWorkerSave" class="btn ghost">💾 Guardar</button>
+      </div>
+      <p class="small muted" style="margin-top:6px">Solo lectura (cosecha/ranking). Cómo crearlo gratis: <span class="mono">GITHUB_PAGES.md</span> → Worker. Se guarda en este dispositivo.</p>
+    </div>
     <div class="cosecha-periodos">
       <button id="btnDashHoy" class="btn primary big2">📅 HOY</button>
       <button id="btnDashSemana" class="btn ghost big2">🌾 ESTA SEMANA</button>
@@ -336,9 +344,9 @@ campos: hora/variedad/kgExportable/kgDescarte.</div>
   <div class="modal-box" id="modalBox"></div>
 </div>
 
-<script src="vendor/jsqr.min.js?v=31"></script>
+<script src="vendor/jsqr.min.js?v=32"></script>
 <script src="vendor/qrcode.min.js"></script>
-<script src="qrparser.js?v=31"></script>
-<script src="app.js?v=31"></script>
+<script src="qrparser.js?v=32"></script>
+<script src="app.js?v=32"></script>
 </body>
 </html>

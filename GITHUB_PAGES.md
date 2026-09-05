@@ -22,8 +22,8 @@ no se puede ni se debe saltar):
 
 | Función | Desde GitHub Pages | Por qué |
 |---|---|---|
-| 🌾 COSECHA — datos reales | ❌ | CORS bloquea `ConsultarKgVista` desde el navegador |
-| 🏆 RANKING — datos reales | ❌ | CORS bloquea `ObtenerRankingVista` |
+| 🌾 COSECHA — datos reales | ✅ con Worker · ❌ directo | `POST ConsultarKgVista` vía Cloudflare Worker (gratis) |
+| 🏆 RANKING — datos reales | ✅ con Worker · ❌ directo | `GET ObtenerRankingVista` vía Cloudflare Worker (gratis) |
 | 🔬 FORENSE (auditorías/endpoints/network/historial) | ❌ | Requiere la API local (SQLite + análisis) y CORS |
 | Todo lo demás (QR DIGITAL, escáner, tema, UI) | ✅ | No requiere red a PROAGRO |
 
@@ -50,3 +50,26 @@ git add -A && git commit -m "docs: sync web" && git push
 ```
 Cuando la facturación se resuelva, el workflow `.github/workflows/deploy.yml`
 publicará automáticamente `web/` en cada push (sin `docs/`).
+
+
+## 🌩️ Worker serverless (Cloudflare) — COSECHA y RANKING con datos reales
+GitHub Pages no puede llamar a PROAGRO por CORS, pero un **Worker de Cloudflare
+(plan gratuito, ~100.000 peticiones/día, sin tarjeta)** sí: corre en el servidor
+de Cloudflare y reenvía SOLO las dos consultas de lectura necesarias.
+
+Código ya incluido: `cloudflare/worker.js` (+ `wrangler.toml`). Solo expone:
+- `POST /api/cosecha` → `POST digital.proagro.pe/QrKgAra/ConsultarKgVista` (valida dni 8 dígitos y rango YYYY-MM-DD ≤ 31 días)
+- `GET  /api/ranking` → `GET  digital.proagro.pe/QrKgAra/ObtenerRankingVista` (valida top 1..5000 y fechas)
+- Todo lo demás: 404/405/400. **Sin proxy abierto, sin URLs arbitrarias, sin escritura.**
+  Verificado contra PROAGRO real: cosecha 200 `{encontrado:false}`, ranking 200 con datos; CORS solo para `anapse.github.io` (y localhost de pruebas).
+
+### Desplegarlo (gratis, ~3 minutos, una sola vez)
+1. Crea cuenta gratis en https://dash.cloudflare.com → **Workers & Pages** → **Create Worker**.
+2. Borra el código de ejemplo y pega el contenido de `cloudflare/worker.js` → **Deploy**.
+3. Copia la URL `https://TU-NOMBRE.TU-SUBDOMINIO.workers.dev`.
+4. Abre https://anapse.github.io/proagro/ → 🌾 COSECHA → en la caja **🌩️ Worker serverless** pega la URL → **💾 Guardar** (se guarda en ese dispositivo). Pulsa 📅 HOY o 🌾 ESTA SEMANA: ya verás datos reales.
+   (Alternativa CLI: `npm i -g wrangler && wrangler login && wrangler deploy cloudflare/worker.js --name proagro-web-api`.)
+
+Con el Worker configurado puedes **apagar la PC**: QR DIGITAL, escáner, COSECHA y
+RANKING funcionan desde el teléfono/tablet contra GitHub Pages + Worker.
+🔬 FORENSE (auditorías con base local SQLite) sigue requiriendo la versión local/VPS.
