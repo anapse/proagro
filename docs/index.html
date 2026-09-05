@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROAGRO WEB — Empleados y Forense</title>
+<link rel="icon" type="image/png" href="assets/logo.png">
+<link rel="stylesheet" href="styles.css?v=31">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <img src="assets/logo.png" class="brand-logo" alt="PROAGRO WEB — Empleados y Forense">
+  </div>
+  <nav class="areas" id="areas">
+    <button data-area="empleados" class="active">👥 EMPLEADOS</button>
+    <button data-area="forense">🔬 FORENSE</button>
+  </nav>
+  <div class="top-actions">
+    <button id="btnTheme" class="btn ghost small" title="Tema claro/oscuro">🌙</button>
+    <span class="forense-tools">
+      <button id="btnQrDebug" class="btn ghost small" title="Diagnóstico técnico (solo FORENSE)">🔧 DEBUG</button>
+      <select id="selProject" title="Proyecto"></select>
+      <button id="btnNewAudit" class="btn ghost" title="Nueva auditoría (crear proyecto o nueva ejecución)">＋ NUEVA AUDITORÍA</button>
+      <button id="btnAnalyze" class="btn primary">▶ ANALIZAR</button>
+      <button id="btnReport" class="btn ghost" title="Generar informe HTML+JSON+PDF de la auditoría seleccionada">⬇ INFORME</button>
+    </span>
+  </div>
+</header>
+
+<div id="progressbar" class="progress hidden"><div class="fill"></div></div>
+<div id="statusbar" class="statusbar"><span id="statusMsg">Iniciando…</span><span id="statusRight" class="mono"></span></div>
+
+<nav class="tabs" id="tabs"></nav>
+
+<div class="auditbar">
+  <label>Auditoría</label>
+  <select id="selAudit"></select>
+  <span id="auditMeta" class="mono muted"></span>
+</div>
+
+<div id="quickStats" class="statstrip"></div>
+
+<main>
+  <!-- ====================== QR DIGITAL (generador) ====================== -->
+  <section id="panel-qrdigital" class="panel">
+    <div class="qr-sec qrdig">
+      <h2>📱 QR DIGITAL</h2>
+      <p class="muted small">Genera un QR con el DNI del trabajador (formato texto). NO es lector:
+      sirve para imprimir/guardar el QR que luego se escanea en 🌾 COSECHA.</p>
+      <label>Ingrese DNI</label>
+      <input id="qdDni" class="inp big-inp" inputmode="numeric" maxlength="8" placeholder="12345678">
+      <button id="btnQrGen" class="btn primary big2 full">🔲 QR DIGITAL</button>
+      <div id="qdMsg" class="qrmsg"></div>
+    </div>
+    <div id="qdResult" class="qr-sec hidden">
+      <h3>DNI: <span id="qdDniLabel" class="mono"></span></h3>
+      <div class="qrimgbox"><div id="qdImg"></div></div>
+      <a id="qdDownload" class="btn primary big2 full" download>⬇ GUARDAR QR</a>
+    </div>
+  </section>
+
+  <!-- ====================== RANKING (preparado) ====================== -->
+  <section id="panel-ranking" class="panel">
+    <div class="qr-sec">
+      <h2>🏆 RANKING</h2>
+      <div class="cardbox">
+        <p>Sección preparada para su implementación (próxima fase).</p>
+        <p class="small muted">Referencia técnica ya disponible en 🔬 FORENSE:
+        <span class="mono">GET /QrKgAra/ObtenerRankingVista</span> (top, fechaIni, fechaFin, lotes, variedades) — 🟢 VERIFICADO con HTTP 200.
+        La consulta pública real devuelve <span class="mono">ranking[]</span> con
+        posicion/nombre/kgExportable/kgDescarte/kgTotal, además de <span class="mono">lotes[]</span> y <span class="mono">variedades[]</span>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== 🌾 MI COSECHA (EMPLEADOS) ====================== -->
+  <section id="panel-qrkg" class="panel cosecha-wide">
+    <div class="cosecha-hero">
+      <div class="cosecha-title">
+        <h2>🌾 MI COSECHA</h2>
+        <p class="small muted">Cuánto cosechaste, cómo vas, qué días trabajaste y cuándo subiste o bajaste.
+        Datos reales de PROAGRO (solo lectura) vía <b>ConsultarKgVista</b> — sin valores de ejemplo.</p>
+      </div>
+      <span id="dashDniTag" class="chip muted">DNI: —</span>
+    </div>
+
+    <div class="cardbox cosecha-quien">
+      <div class="metodos">
+        <button id="metDni">👤 DNI</button>
+        <button id="metQr" class="active">📷 QR</button>
+      </div>
+
+      <div id="metDniBox" class="hidden">
+        <label>👤 Trabajador — escribe tu DNI</label>
+        <div class="row-who">
+          <input id="dashDniInp" class="inp who-inp mono" inputmode="numeric" maxlength="8" placeholder="DNI (8 dígitos)">
+          <button id="btnWhoAplicar" class="btn primary">✔ VER MI COSECHA</button>
+        </div>
+      </div>
+
+      <div id="metQrBox">
+        <label>📷 Escanea el QR del trabajador (o foto / imagen)</label>
+        <div class="row-who">
+          <button id="btnQrCamera" class="btn primary">📷 ESCANEAR QR</button>
+          <button id="btnQrTake" class="btn ghost">📸 TOMAR FOTO</button>
+          <button id="btnQrUpload" class="btn ghost">📁 SUBIR IMAGEN</button>
+        </div>
+        <input type="file" id="qrFileInput" accept="image/*" class="hidden">
+        <div id="qrHttpsBar" class="httpsbar hidden" style="margin-top:10px">
+          <b>📷 Para usar la CÁMARA entra por HTTPS:</b>
+          <div class="row"><a id="qrHttpsLink" class="btn primary big2" href="#">🔒 ABRIR HTTPS (cámara)</a></div>
+          <div class="small muted">HTTP no permite cámara en el navegador de la tablet.
+          HTTPS usa el mismo certificado local (acepta el aviso la 1ª vez).</div>
+        </div>
+        <div id="qrMsg" class="qrmsg"></div>
+      </div>
+    </div>
+
+    <div class="cosecha-periodos">
+      <button id="btnDashHoy" class="btn primary big2">📅 HOY</button>
+      <button id="btnDashSemana" class="btn ghost big2">🌾 ESTA SEMANA</button>
+    </div>
+    <p class="small muted" style="margin:6px 2px">📅 HOY muestra el último dato disponible (de hoy o de ayer). 🌾 ESTA SEMANA va de <b>lunes</b> hasta hoy (máximo <b>sábado</b>); el domingo no se muestra.</p>
+
+    <div id="dashMsg" class="qrmsg dashstatus"></div>
+    <div id="dashRes"></div>
+
+    
+  </section>
+
+  <!-- modal escáner QR a pantalla completa -->
+  <div id="scanModal" class="scanmodal hidden">
+    <div class="scanbox">
+      <div class="scanhead"><b>ESCANEAR QR</b>
+        <button id="btnScanClose" class="btn ghost">✖ CERRAR</button></div>
+      <div class="scanvideo"><video id="qrVideo" playsinline muted></video></div>
+      <canvas id="qrCanvas" class="hidden"></canvas>
+      <div id="scanStatus" class="scanstatus"></div>
+      <div class="scanbtns">
+      <button id="btnScanTake" class="btn ghost big2">📸 Tomar foto</button>
+        <button id="btnScanUpload" class="btn ghost big2">🖼️ Cargar imagen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================== RESUMEN ====================== -->
+  <section id="panel-resumen" class="panel active">
+    <div class="cards" id="sumCards"></div>
+    <div class="grid2">
+      <div class="cardbox">
+        <h3>Pregunta bajo investigación</h3>
+        <p class="muted">«¿Existen indicios de que un dato pueda enviarse correctamente desde el
+        navegador y luego no aparecer en las consultas públicas?» — Este panel nunca afirma pérdida
+        de datos sin evidencia: todo se clasifica como
+        <span class="klass k-hecho">HECHO OBSERVADO</span>,
+        <span class="klass k-indicio">INDICIO</span>,
+        <span class="klass k-hipotesis">HIPÓTESIS</span> o
+        <span class="klass k-prueba">PRUEBA PENDIENTE</span>.</p>
+        <h3>Ranking principal (ObtenerRankingVista)</h3>
+        <div id="mainRank" class="mono small"></div>
+        <h3>Acciones rápidas</h3>
+        <div class="row">
+          <button class="btn ghost" id="btnOpenSnapshot">Abrir snapshot</button>
+          <button class="btn ghost" id="btnAuditLog">Ver log</button>
+          <button class="btn ghost warn" id="btnConcurrency">Prueba de concurrencia (opcional)</button>
+        </div>
+      </div>
+      <div class="cardbox">
+        <h3>Hallazgos por severidad</h3><div id="sevBars"></div>
+        <h3>Hallazgos por clase</h3><div id="klassBars"></div>
+        <h3>Pantallas detectadas</h3><div id="screensChips"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== NETWORK ====================== -->
+  <section id="panel-network" class="panel">
+    <div class="toolbar">
+      <input id="netFilter" placeholder="filtrar URL…" class="inp">
+      <select id="netKind" class="inp">
+        <option value="">todos los tipos</option>
+        <option>document</option><option>script</option><option>xhr</option>
+        <option>fetch</option><option>css</option><option>image</option>
+        <option>concurrency</option><option>other</option>
+      </select>
+      <select id="netStatus" class="inp">
+        <option value="">todos los estados</option>
+        <option>2xx</option><option>4xx</option><option>5xx</option><option>error</option>
+      </select>
+      <span id="netCount" class="muted small"></span>
+    </div>
+    <div class="tblwrap"><table id="netTable" class="tbl sortable"></table></div>
+  </section>
+
+  <!-- ====================== ENDPOINTS (INVENTARIO) ====================== -->
+  <section id="panel-endpoints" class="panel">
+    <div class="inv-head">
+      <h2>🔌 ENDPOINTS ENCONTRADOS <span id="invTotal" class="chip"></span></h2>
+      <div class="row">
+        <button id="invBtnJson" class="btn ghost small">📥 EXPORTAR JSON</button>
+        <button id="invBtnCsv" class="btn ghost small">📥 EXPORTAR CSV</button>
+      </div>
+    </div>
+    <div id="invStats" class="cards"></div>
+    <div class="toolbar">
+      <input id="invBuscar" class="inp" placeholder="🔎 Buscar endpoint…" style="flex:1;min-width:200px">
+      <span id="invCount" class="muted small"></span>
+    </div>
+    <div class="chips inv-filters" id="invFiltros"></div>
+    <div class="note">Estados: <b>🟢 VERIFICADO</b> = consultado de forma segura y respondió ·
+    <b>🟡 ENCONTRADO EN CÓDIGO</b> = la ruta aparece en JS/HTML con método (no consultado) ·
+    <b>🔵 REFERENCIADO</b> = aparece como referencia incompleta · <b>🔴 ERROR</b> = la consulta de lectura falló.
+    Nada de esto se inventa: cada fila cita el archivo/chunk donde apareció.</div>
+    <div class="tblwrap"><table id="epTable" class="tbl sortable"></table></div>
+
+    <div id="invExtras">
+      <div class="cardbox" style="margin-top:16px">
+        <h3>🧩 FUNCIONES → ENDPOINTS <span id="fnCount" class="chip"></span></h3>
+        <div id="fnTable"></div>
+      </div>
+      <div class="cardbox">
+        <h3>📄 FORMULARIOS <span id="fmCount" class="chip"></span></h3>
+        <div id="fmBox"></div>
+      </div>
+      <div class="cardbox">
+        <h3>📷 QR <span id="qrCount" class="chip"></span></h3>
+        <div id="qrBox"></div>
+      </div>
+      <div class="cardbox">
+        <h3>📊 CAMPOS / DATOS DETECTADOS <span id="cmCount" class="chip"></span></h3>
+        <div id="cmBox"></div>
+      </div>
+      <div class="cardbox">
+        <h3>🗺️ MAPA DE LA WEB</h3>
+        <div id="mapBox"></div>
+      </div>
+
+      <!-- Historial KG y documento del endpoint (viven en FORENSE) -->
+      <div class="cardbox" style="margin-top:14px">
+        <h3>📜 Historial local de consultas KG <span id="hisCount" class="chip"></span></h3>
+        <div class="row"><button id="btnHisClear" class="btn warn">🗑 Limpiar historial</button></div>
+        <p class="small muted">Consultas realizadas desde EMPLEADOS → COSECHA (QR o DNI).
+        Guardado solo en la base de datos local (SQLite), nunca se envía a terceros.</p>
+        <div class="tblwrap"><table id="hisTable" class="tbl"></table></div>
+      </div>
+      <div class="cardbox doc-sec">
+        <h3>🔌 Endpoint real usado por COSECHA (documentado — no inventado)</h3>
+        <div class="mono doc-box">POST {origen}/QrKgAra/ConsultarKgVista
+body JSON: {"dni","fechaIni","fechaFin"} (YYYY-MM-DD)
+contentType: application/json; charset=utf-8
+Origen: script inline de la web (inline_1.js) → "Consultar mi Kg"
+Respuesta esperada: {encontrado, nombre, dias[].detalle[]}
+campos: hora/variedad/kgExportable/kgDescarte.</div>
+        <p class="small muted">El servidor de esta PC hace la consulta (la tablet nunca
+        llama a PROAGRO directamente). Solo lectura: no crea ni modifica registros.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== JAVASCRIPT ====================== -->
+  <section id="panel-javascript" class="panel">
+    <div class="note">Archivos descargados y analizados. Haz clic en una fila para ver llamadas
+    AJAX/fetch, keywords KG y fragmentos detectados en ese bundle.</div>
+    <div class="tblwrap"><table id="jsTable" class="tbl"></table></div>
+  </section>
+
+  <!-- ====================== SIGNALR ====================== -->
+  <section id="panel-signalr" class="panel">
+    <div id="sigBox"></div>
+  </section>
+
+  <!-- ====================== KG ====================== -->
+  <section id="panel-kg" class="panel">
+    <div class="note">KG-INTEGRITY: recorrido del dato <b>Kg / peso / cosecha</b> entre pantallas,
+    funciones, peticiones y endpoints. Correlación heurística del código observable —
+    no demuestra pérdida de datos.</div>
+    <div id="kgBox"></div>
+  </section>
+
+  <!-- ====================== ERRORES ====================== -->
+  <section id="panel-errores" class="panel">
+    <div class="toolbar"><div class="chips" id="errChips"></div></div>
+    <div class="tblwrap"><table id="errTable" class="tbl"></table></div>
+  </section>
+
+  <!-- ====================== CONSISTENCIA ====================== -->
+  <section id="panel-consistencia" class="panel">
+    <div id="consBox"></div>
+  </section>
+
+  <!-- ====================== SNAPSHOTS ====================== -->
+  <section id="panel-snapshots" class="panel">
+    <div id="snapBox"></div>
+  </section>
+
+  <!-- ====================== HALLAZGOS ====================== -->
+  <section id="panel-hallazgos" class="panel">
+    <div class="toolbar">
+      <select id="fSev" class="inp"><option value="">severidad: todas</option>
+        <option>CRITICAL</option><option>HIGH</option><option>MEDIUM</option>
+        <option>LOW</option><option>INFO</option></select>
+      <select id="fKlass" class="inp"><option value="">clase: todas</option>
+        <option>HECHO OBSERVADO</option><option>INDICIO</option>
+        <option>HIPOTESIS</option><option>PRUEBA PENDIENTE</option></select>
+      <select id="fType" class="inp"><option value="">tipo: todos</option></select>
+      <span id="fCount" class="muted small"></span>
+    </div>
+    <div class="tblwrap"><table id="fTable" class="tbl findings"></table></div>
+  </section>
+
+  <!-- ====================== EVIDENCIAS ====================== -->
+  <section id="panel-evidencias" class="panel">
+    <div class="note">Cada archivo de evidencia tiene su SHA-256 (manifiesto en el snapshot).
+    Descarga directa con un clic.</div>
+    <div class="tblwrap"><table id="evTable" class="tbl"></table></div>
+  </section>
+
+  <!-- ====================== INFORMES ====================== -->
+  <section id="panel-informes" class="panel">
+    <div class="cardbox">
+      <h3>Generar informe forense</h3>
+      <p class="muted">Crea <b>PROAGRO_WEB_FORENSICS_&lt;fecha&gt;.html</b>, <b>.json</b> y
+      <b>.pdf</b> (PDF vía Chromium headless) con las 21 secciones requeridas.</p>
+      <div class="row">
+        <button class="btn primary" id="btnGenReport">Generar informe (HTML + JSON + PDF)</button>
+      </div>
+      <div id="genMsg" class="small"></div>
+    </div>
+    <div id="repTableBox"></div>
+  </section>
+</main>
+
+<!-- modal genérico -->
+<div id="modal" class="modal hidden">
+  <div class="modal-box" id="modalBox"></div>
+</div>
+
+<script src="vendor/jsqr.min.js?v=31"></script>
+<script src="vendor/qrcode.min.js"></script>
+<script src="qrparser.js?v=31"></script>
+<script src="app.js?v=31"></script>
+</body>
+</html>
