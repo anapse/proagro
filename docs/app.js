@@ -14,8 +14,9 @@ const state = {
 let pollTimer = null;
 let cfg = {};               // config real del servidor (puertos) vía /api/health
 let staticMode = false;
+const DEFAULT_WORKER = "https://proagro-api.elherreroanapse.workers.dev"; // 🌩️ Worker serverless (PROAGRO)
 let workerUrl = "";
-try { workerUrl = localStorage.getItem("pwf_worker") || ""; } catch (e) { }        // TRUE = GitHub Pages (sin backend local)
+try { workerUrl = (localStorage.getItem("pwf_worker") || "").trim() || DEFAULT_WORKER; } catch (e) { workerUrl = DEFAULT_WORKER; }
 
 /* ---- áreas 👥 EMPLEADOS / 🔬 FORENSE ---- */
 const TABS_EMPLEADOS = [["qrdigital", "📱 QR DIGITAL"], ["qrkg", "🌾 COSECHA"], ["ranking", "🏆 RANKING"]];
