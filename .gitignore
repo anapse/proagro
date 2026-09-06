@@ -29,3 +29,6 @@ Thumbs.db
 .dev.vars*
 !.dev.vars.example
 !.env.example
+test_admin.mjs
+e2e_admin.mjs
+cloudflare/scripts/
