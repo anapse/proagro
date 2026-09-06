@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🔐 PROAGRO ADMIN</title>
+<link rel="stylesheet" href="../styles.css">
+<style>
+  /* ---- Ajustes del dashboard admin (reutiliza styles.css base) ---- */
+  body { min-height: 100vh; }
+  .admin-top { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;
+    background:var(--panel); border-bottom:1px solid var(--border); padding:12px 16px; position:sticky; top:0; z-index:20; }
+  .admin-top .brand2 { display:flex; align-items:center; gap:10px; font-weight:800; font-size:17px; }
+  .admin-top .chip-usr { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .admin-top .chip-usr b { color:var(--accent); }
+  .admin-body { display:grid; grid-template-columns:220px 1fr; gap:16px; padding:16px; max-width:1200px; margin:0 auto; }
+  .admin-menu { display:flex; flex-direction:column; gap:6px; }
+  .admin-menu button { text-align:left; justify-content:flex-start; }
+  .admin-menu button.on { outline:2px solid var(--accent); }
+  .admin-sec { min-width:0; }
+  .grid4 { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:16px; }
+  .kpi { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:14px; }
+  .kpi .num { font-size:26px; font-weight:800; color:var(--accent); }
+  .kpi .lbl { font-size:12px; color:var(--muted); }
+  .bar-h { background:var(--panel2); border-radius:8px; height:14px; overflow:hidden; margin:4px 0 2px; }
+  .bar-h > div { height:100%; background:var(--accent); border-radius:8px; transition:width .3s; }
+  .cm-surv-res { margin:8px 0; }
+  .mono { font-family:Consolas,monospace; font-size:12px; }
+  .hidden2 { display:none !important; }
+  .login-wrap { min-height:92vh; display:flex; align-items:center; justify-content:center; padding:18px; }
+  .login-card { width:min(380px,94vw); }
+  .login-logo { font-size:44px; text-align:center; }
+  @media (max-width:760px){
+    .admin-body { grid-template-columns:1fr; }
+    .admin-menu { flex-direction:row; flex-wrap:wrap; }
+    .tblwrap { overflow-x:auto; }
+  }
+</style>
+</head>
+<body data-static="1">
+
+  <!-- ============ LOGIN ============ -->
+  <div id="loginView" class="login-wrap">
+    <div class="cardbox login-card">
+      <div class="login-logo">🔐</div>
+      <h2 style="text-align:center;margin:6px 0 2px">PROAGRO ADMIN</h2>
+      <p class="muted" style="text-align:center;margin-bottom:14px">Panel de Comunidad</p>
+      <label>ID</label>
+      <input id="admId" class="inp" style="width:100%" maxlength="40" autocomplete="username" placeholder="anapse">
+      <label>CONTRASEÑA</label>
+      <input id="admPass" type="password" class="inp" style="width:100%" maxlength="128" autocomplete="current-password" placeholder="••••••••">
+      <div id="admLoginMsg" class="small" style="margin-top:8px"></div>
+      <button id="btnLogin" class="btn primary" style="width:100%;margin-top:10px">🔓 INGRESAR</button>
+    </div>
+  </div>
+
+  <!-- ============ CAMBIO OBLIGATORIO DE CONTRASEÑA ============ -->
+  <div id="chgView" class="login-wrap hidden2">
+    <div class="cardbox login-card">
+      <div class="login-logo">🔑</div>
+      <h2 style="text-align:center;margin:6px 0 2px">Cambia tu contraseña</h2>
+      <p class="muted small" style="text-align:center;margin-bottom:14px">
+        Es tu primer ingreso: crea una contraseña nueva para tu usuario <b id="chgUser"></b>.</p>
+      <label>Contraseña nueva</label>
+      <input id="chgPass1" type="password" class="inp" style="width:100%" maxlength="128" autocomplete="new-password" placeholder="Mínimo 6 caracteres">
+      <label>Repite la contraseña</label>
+      <input id="chgPass2" type="password" class="inp" style="width:100%" maxlength="128" autocomplete="new-password" placeholder="Repite la contraseña">
+      <div id="chgMsg" class="small" style="margin-top:8px"></div>
+      <button id="btnChg" class="btn primary" style="width:100%;margin-top:10px">💾 GUARDAR Y ENTRAR</button>
+    </div>
+  </div>
+
+  <!-- ============ PANEL ============ -->
+  <div id="panelView" class="hidden2">
+    <div class="admin-top">
+      <div class="brand2">⚙️ PANEL DE ADMINISTRACIÓN <span class="chip">PROAGRO COMUNIDAD</span></div>
+      <div class="chip-usr small">
+        <span>Usuario conectado: <b id="hdrUser">—</b></span>
+        <span id="hdrRol" class="chip"></span>
+        <button id="btnLogout" class="btn ghost small">🚪 CERRAR SESIÓN</button>
+      </div>
+    </div>
+    <div class="admin-body">
+      <nav class="admin-menu" id="admMenu"></nav>
+      <div class="admin-sec" id="admSec"><p class="muted">Cargando…</p></div>
+    </div>
+  </div>
+
+<script src="app.js"></script>
+</body>
+</html>

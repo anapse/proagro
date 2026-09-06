@@ -26,7 +26,7 @@ function corsHeaders(origin) {
       /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
         ? origin
         : "null",
-    "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400",
   };
@@ -116,6 +116,136 @@ function esAdmin(env, request) {
 // ---- D1 ----
 function necesitaDb(env) {
   return !!(env && env.DB);
+}
+
+/* ============================================================
+ *  ADMIN (panel privado /api/admin/*) — helpers
+ *  Autenticación por usuario+contraseña contra D1 (admin_users),
+ *  sesiones con token aleatorio (hash en D1), roles por nivel.
+ *  El token ADMIN anterior (COMMUNITY_ADMIN_TOKEN) queda solo
+ *  para compatibilidad de /api/community/admin/* y se eliminará
+ *  al migrar la página pública por completo.
+ * ============================================================ */
+
+// --- PBKDF2 (WebCrypto, compatible con el hash del seed) ---
+async function hashPassword(pw, saltB64, iter, hashB64) {
+  try {
+    const enc = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+      "raw", enc.encode(pw), "PBKDF2", false, ["deriveBits"]
+    );
+    const salt = Uint8Array.from(atob(saltB64), (c) => c.charCodeAt(0));
+    const bits = await crypto.subtle.deriveBits(
+      { name: "PBKDF2", hash: "SHA-256", salt, iterations: iter },
+      keyMaterial, 256
+    );
+    const want = Uint8Array.from(atob(hashB64), (c) => c.charCodeAt(0));
+    const got = new Uint8Array(bits);
+    if (got.length !== want.length) return false;
+    let diff = 0;
+    for (let i = 0; i < got.length; i++) diff |= got[i] ^ want[i];
+    return diff === 0;
+  } catch (e) { return false; }
+}
+
+async function verificarPassword(pw, storedHash) {
+  if (typeof pw !== "string" || typeof storedHash !== "string") return false;
+  const parts = storedHash.split("$");
+  if (parts.length !== 5 || parts[0] !== "pbkdf2" || parts[1] !== "sha256") return false;
+  const iter = Number(parts[2]);
+  if (!Number.isInteger(iter) || iter < 1000 || iter > 10000000) return false;
+  return hashPassword(pw, parts[3], iter, parts[4]);
+}
+
+// Genera un hash nuevo (para crear usuarios / cambiar contraseña)
+async function generarHash(pw) {
+  const iter = 100000;
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw", enc.encode(pw), "PBKDF2", false, ["deriveBits"]
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", hash: "SHA-256", salt, iterations: iter },
+    keyMaterial, 256
+  );
+  const b64 = (u8) => btoa(String.fromCharCode(...u8));
+  return "pbkdf2$sha256$" + iter + "$" + b64(salt) + "$" + b64(new Uint8Array(bits));
+}
+
+// --- utilidades de sesión ---
+async function sha256Hex(texto) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(texto));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function tokenAleatorio() {
+  const u8 = crypto.getRandomValues(new Uint8Array(32));
+  return [...u8].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+const RE_USERNAME = /^[A-Za-z0-9._-]{3,40}$/;
+const RE_PASSWORD = /^.{6,128}$/;
+
+// Login fallido: rate limit en memoria (por username+IP)
+const LOGIN_FAILS = new Map(); // clave -> {n, ts}
+function loginBloqueado(clave) {
+  const now = Date.now();
+  if (LOGIN_FAILS.size > 2000) {
+    for (const [k, v] of LOGIN_FAILS) if (now - v.ts > 900000) LOGIN_FAILS.delete(k);
+  }
+  const e = LOGIN_FAILS.get(clave);
+  if (!e || now - e.ts > 900000) return false;
+  return e.n >= 5; // máx 5 fallos / 15 min
+}
+function loginFallido(clave) {
+  const now = Date.now();
+  const e = LOGIN_FAILS.get(clave);
+  if (!e || now - e.ts > 900000) LOGIN_FAILS.set(clave, { n: 1, ts: now });
+  else e.n += 1;
+}
+function loginExitoso(clave) { LOGIN_FAILS.delete(clave); }
+
+const ROLES = { 1: "ADMIN", 2: "MODERADOR", 3: "EDITOR", 4: "CONSULTA" };
+const rolNombre = (n) => ROLES[n] || "CONSULTA";
+
+// Valida el token de sesión y devuelve el usuario (o null)
+async function sesionUsuario(env, request) {
+  if (!necesitaDb(env)) return null;
+  const h = request.headers.get("Authorization") || "";
+  const m = h.match(/^Bearer\s+([A-Za-z0-9]+)$/);
+  if (!m) return null;
+  const th = await sha256Hex(m[1]);
+  const fila = await env.DB.prepare(
+    `SELECT s.user_id, s.expires_at, u.username, u.display_name, u.role_level, u.active, u.must_change_password
+     FROM admin_sessions s JOIN admin_users u ON u.id = s.user_id
+     WHERE s.token_hash = ?`
+  ).bind(th).first();
+  if (!fila) return null;
+  if (new Date(fila.expires_at + "Z") < new Date()) return null;
+  if (fila.active !== 1) return null;
+  return {
+    id: fila.user_id,
+    username: fila.username,
+    display_name: fila.display_name,
+    role_level: fila.role_level,
+    rol: rolNombre(fila.role_level),
+    must_change_password: !!fila.must_change_password,
+  };
+}
+
+// Permiso: nivel mínimo requerido (1 = solo ADMIN ... 4 = cualquiera autenticado)
+async function exigirRol(env, request, minLevel) {
+  const u = await sesionUsuario(env, request);
+  if (!u) return { error: "No autorizado", status: 401 };
+  if (u.role_level > minLevel) return { error: "No tienes permiso para esta acción", status: 403 };
+  return { usuario: u };
+}
+
+// Limpia sesiones vencidas de un usuario (al hacer logout o login nuevo)
+async function limpiarSesionesUsuario(env, userId) {
+  await env.DB.prepare("DELETE FROM admin_sessions WHERE user_id=? OR expires_at < datetime('now')")
+    .bind(userId).run();
 }
 
 // Conteos de votos por supervisor en un solo query
@@ -950,6 +1080,519 @@ export default {
         }
       }
       return jsonRes({ ok: false, error: "Método no permitido" }, 405, origin);
+    }
+
+    /* ============================================================
+     *  ADMIN — panel privado (/api/admin/*)
+     *  Autenticación: usuario+contraseña (D1) · sesión por token.
+     *  Roles: 1 ADMIN · 2 MODERADOR · 3 EDITOR · 4 CONSULTA
+     * ============================================================ */
+    const esAdminPath = p === "/api/admin/login"; // sin auth
+    if (p.startsWith("/api/admin/")) {
+      if (!necesitaDb(env)) return jsonRes({ ok: false, error: "D1 no configurado en el Worker" }, 503, origin);
+
+      // ---------- LOGIN ----------
+      if (p === "/api/admin/login" && request.method === "POST") {
+        let body;
+        try { body = await request.json(); } catch (e) {
+          return jsonRes({ ok: false, error: "JSON inválido" }, 400, origin);
+        }
+        const username = limpiarTexto(body.username, 40).toLowerCase();
+        const password = typeof body.password === "string" ? body.password : "";
+        if (!RE_USERNAME.test(username) || !password) {
+          return jsonRes({ ok: false, error: "ID o contraseña incorrectos" }, 401, origin);
+        }
+        const ip = request.headers.get("CF-Connecting-IP") || "?";
+        const clave = username + "|" + ip;
+        if (loginBloqueado(clave)) {
+          return jsonRes({ ok: false, error: "Demasiados intentos. Espera 15 minutos." }, 429, origin);
+        }
+        try {
+          const u = await env.DB.prepare(
+            "SELECT id, username, password_hash, display_name, role_level, active, must_change_password FROM admin_users WHERE username=?"
+          ).bind(username).first();
+          if (!u || u.active !== 1 || !(await verificarPassword(password, u.password_hash))) {
+            loginFallido(clave);
+            return jsonRes({ ok: false, error: "ID o contraseña incorrectos" }, 401, origin);
+          }
+          loginExitoso(clave);
+          await limpiarSesionesUsuario(env, u.id);
+          const token = tokenAleatorio();
+          const th = await sha256Hex(token);
+          const exp = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 19).replace("T", " ");
+          await env.DB.prepare(
+            "INSERT INTO admin_sessions (user_id, token_hash, expires_at) VALUES (?,?,?)"
+          ).bind(u.id, th, exp).run();
+          await env.DB.prepare("UPDATE admin_users SET last_login_at=datetime('now') WHERE id=?")
+            .bind(u.id).run();
+          return jsonRes({
+            ok: true,
+            token,
+            expira: exp,
+            user: {
+              id: u.id, username: u.username, display_name: u.display_name,
+              role_level: u.role_level, rol: rolNombre(u.role_level),
+              must_change_password: !!u.must_change_password,
+            },
+          }, 200, origin);
+        } catch (e) {
+          return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+        }
+      }
+
+      // resto: exige sesión válida
+      const auth = await sesionUsuario(env, request);
+      if (!auth) return jsonRes({ ok: false, error: "No autorizado" }, 401, origin);
+      const user = auth;
+
+      // ---------- LOGOUT ----------
+      if (p === "/api/admin/logout" && request.method === "POST") {
+        try {
+          const h = request.headers.get("Authorization") || "";
+          const m = h.match(/^Bearer\s+([A-Za-z0-9]+)$/);
+          if (m) {
+            const th = await sha256Hex(m[1]);
+            await env.DB.prepare("DELETE FROM admin_sessions WHERE token_hash=?").bind(th).run();
+          }
+          return jsonRes({ ok: true }, 200, origin);
+        } catch (e) {
+          return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+        }
+      }
+
+      // ---------- ME ----------
+      if (p === "/api/admin/me" && request.method === "GET") {
+        return jsonRes({ ok: true, user }, 200, origin);
+      }
+
+      // ---------- CAMBIAR MI CONTRASEÑA ----------
+      if (p === "/api/admin/me/password" && request.method === "PUT") {
+        let body;
+        try { body = await request.json(); } catch (e) {
+          return jsonRes({ ok: false, error: "JSON inválido" }, 400, origin);
+        }
+        const actual = typeof body.actual === "string" ? body.actual : "";
+        const nueva = typeof body.nueva === "string" ? body.nueva : "";
+        if (!RE_PASSWORD.test(nueva)) {
+          return jsonRes({ ok: false, error: "La contraseña debe tener entre 6 y 128 caracteres" }, 400, origin);
+        }
+        try {
+          const u = await env.DB.prepare(
+            "SELECT id, password_hash, must_change_password FROM admin_users WHERE id=?"
+          ).bind(user.id).first();
+          if (!u) return jsonRes({ ok: false, error: "No autorizado" }, 401, origin);
+          // Si aún no cambió la inicial, no hace falta la contraseña actual (1er ingreso)
+          if (!u.must_change_password && !(await verificarPassword(actual, u.password_hash))) {
+            return jsonRes({ ok: false, error: "La contraseña actual no es correcta" }, 400, origin);
+          }
+          const nuevoHash = await generarHash(nueva);
+          await env.DB.prepare(
+            "UPDATE admin_users SET password_hash=?, must_change_password=0, updated_at=datetime('now') WHERE id=?"
+          ).bind(nuevoHash, user.id).run();
+          return jsonRes({ ok: true, message: "Contraseña actualizada" }, 200, origin);
+        } catch (e) {
+          return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+        }
+      }
+
+      // ============================================================
+      //  USUARIOS ADMIN — solo ADMIN (nivel 1)
+      // ============================================================
+      const requiere = async (min, fn) => {
+        if (user.role_level > min) return jsonRes({ ok: false, error: "No tienes permiso para esta acción" }, 403, origin);
+        try { return await fn(); } catch (e) {
+          return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+        }
+      };
+
+      // GET /api/admin/users
+      if (p === "/api/admin/users" && request.method === "GET") {
+        return requiere(1, async () => {
+          const rr = await env.DB.prepare(
+            "SELECT id, username, display_name, role_level, active, must_change_password, created_at, last_login_at FROM admin_users ORDER BY role_level, username"
+          ).all();
+          // nunca devolver password_hash
+          return jsonRes({ ok: true, usuarios: (rr.results || []).map((x) => ({ ...x, rol: rolNombre(x.role_level) })) }, 200, origin);
+        });
+      }
+      // POST /api/admin/users (crear usuario admin/moderador/editor/consulta)
+      if (p === "/api/admin/users" && request.method === "POST") {
+        return requiere(1, async () => {
+          let body;
+          try { body = await request.json(); } catch (e) {
+            return jsonRes({ ok: false, error: "JSON inválido" }, 400, origin);
+          }
+          const username = limpiarTexto(body.username, 40).toLowerCase();
+          const password = typeof body.password === "string" ? body.password : "";
+          const display_name = limpiarTexto(body.display_name, 80);
+          let role_level = Number(body.role_level);
+          if (!RE_USERNAME.test(username)) return jsonRes({ ok: false, error: "ID inválido (3-40 letras/números)" }, 400, origin);
+          if (!RE_PASSWORD.test(password)) return jsonRes({ ok: false, error: "La contraseña debe tener entre 6 y 128 caracteres" }, 400, origin);
+          if (![1, 2, 3, 4].includes(role_level)) role_level = 2;
+          const existe = await env.DB.prepare("SELECT id FROM admin_users WHERE username=?").bind(username).first();
+          if (existe) return jsonRes({ ok: false, error: "Ese ID de acceso ya existe" }, 409, origin);
+          const hash = await generarHash(password);
+          const ins = await env.DB.prepare(
+            "INSERT INTO admin_users (username, password_hash, display_name, role_level, active, must_change_password) VALUES (?,?,?,?,1,1)"
+          ).bind(username, hash, display_name || username, role_level).run();
+          return jsonRes({ ok: true, id: ins.meta.last_row_id }, 200, origin);
+        });
+      }
+      // PUT/DELETE /api/admin/users/:id
+      m = p.match(/^\/api\/admin\/users\/(\d+)$/);
+      if (m) {
+        const uid = Number(m[1]);
+        if (request.method === "PUT") {
+          return requiere(1, async () => {
+            let body;
+            try { body = await request.json(); } catch (e) {
+              return jsonRes({ ok: false, error: "JSON inválido" }, 400, origin);
+            }
+            const sets = []; const binds = [];
+            if (body.display_name !== undefined) { sets.push("display_name=?"); binds.push(limpiarTexto(body.display_name, 80)); }
+            if (body.role_level !== undefined) {
+              const rl = Number(body.role_level);
+              if (![1, 2, 3, 4].includes(rl)) return jsonRes({ ok: false, error: "Nivel inválido (1-4)" }, 400, origin);
+              sets.push("role_level=?"); binds.push(rl);
+            }
+            if (body.active !== undefined) { sets.push("active=?"); binds.push(body.active ? 1 : 0); }
+            if (!sets.length) return jsonRes({ ok: false, error: "Nada que actualizar" }, 400, origin);
+            binds.push(uid);
+            await env.DB.prepare("UPDATE admin_users SET " + sets.join(", ") + ", updated_at=datetime('now') WHERE id=?").bind(...binds).run();
+            return jsonRes({ ok: true }, 200, origin);
+          });
+        }
+        if (request.method === "DELETE") {
+          return requiere(1, async () => {
+            // no permitir borrarse a sí mismo ni eliminar al último ADMIN
+            if (uid === user.id) return jsonRes({ ok: false, error: "No puedes eliminar tu propio usuario" }, 400, origin);
+            const objetivo = await env.DB.prepare("SELECT role_level FROM admin_users WHERE id=?").bind(uid).first();
+            if (objetivo && objetivo.role_level === 1) {
+              const admins = await env.DB.prepare("SELECT COUNT(*) n FROM admin_users WHERE role_level=1 AND active=1").first();
+              if ((admins && admins.n) <= 1) return jsonRes({ ok: false, error: "Debe existir al menos un ADMIN activo" }, 400, origin);
+            }
+            await env.DB.prepare("UPDATE admin_users SET active=0, updated_at=datetime('now') WHERE id=?").bind(uid).run();
+            await env.DB.prepare("DELETE FROM admin_sessions WHERE user_id=?").bind(uid).run();
+            return jsonRes({ ok: true }, 200, origin);
+          });
+        }
+        return jsonRes({ ok: false, error: "Método no permitido" }, 405, origin);
+      }
+      // POST /api/admin/users/:id/reset-password — solo ADMIN (restablece y obliga cambio)
+      m = p.match(/^\/api\/admin\/users\/(\d+)\/reset-password$/);
+      if (m && request.method === "POST") {
+        if (user.role_level > 1) return jsonRes({ ok: false, error: "No tienes permiso para esta acción" }, 403, origin);
+        return requiere(1, async () => {
+          let body;
+          try { body = await request.json(); } catch (e) {
+            return jsonRes({ ok: false, error: "JSON inválido" }, 400, origin);
+          }
+          const nueva = typeof body.password === "string" ? body.password : "";
+          if (!RE_PASSWORD.test(nueva)) {
+            return jsonRes({ ok: false, error: "La contraseña debe tener entre 6 y 128 caracteres" }, 400, origin);
+          }
+          const nuevoHash = await generarHash(nueva);
+          await env.DB.prepare(
+            "UPDATE admin_users SET password_hash=?, must_change_password=1, updated_at=datetime('now') WHERE id=?"
+          ).bind(nuevoHash, Number(m[1])).run();
+          await env.DB.prepare("DELETE FROM admin_sessions WHERE user_id=?").bind(Number(m[1])).run();
+          return jsonRes({ ok: true, message: "Contraseña restablecida" }, 200, origin);
+        });
+      }
+      // ============================================================
+      //  SUPERVISORES (admin) — CRUD con permisos
+      //  Nivel 1 puede todo; niveles 2-4 solo lectura (GET)
+      // ============================================================
+      // GET /api/admin/supervisors — cualquier usuario autenticado
+      if (p === "/api/admin/supervisors" && request.method === "GET") {
+        try {
+          const lista = (await env.DB.prepare("SELECT id, nombre, cargo, activo, created_at FROM supervisores ORDER BY activo DESC, nombre").all()).results || [];
+          const votos = await supervisorVotos(env, origin); // mapa {id: {likes, dislikes}}
+          const conVotos = lista.map((s) => {
+            const v = votos[s.id] || { likes: 0, dislikes: 0 };
+            return { ...s, likes: v.likes || 0, dislikes: v.dislikes || 0, comentarios: 0, activo: !!s.activo };
+          });
+          // conteo real de comentarios por supervisor
+          const cc = await env.DB.prepare("SELECT supervisor_id, COUNT(*) n FROM comments WHERE supervisor_id IS NOT NULL GROUP BY supervisor_id").all();
+          for (const s of conVotos) {
+            const f = (cc.results || []).find((c) => c.supervisor_id === s.id);
+            if (f) s.comentarios = f.n;
+          }
+          return jsonRes({ ok: true, supervisores: conVotos }, 200, origin);
+        } catch (e) {
+          return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+        }
+      }
+      // POST /api/admin/supervisors — solo ADMIN (nivel 1)
+      if (p === "/api/admin/supervisors" && request.method === "POST") {
+        if (user.role_level > 1) return jsonRes({ ok: false, error: "No tienes permiso para esta acción" }, 403, origin);
+        let body;
+        try { body = await request.json(); } catch (e) {
+          return jsonRes({ ok: false, error: "JSON inválido" }, 400, origin);
+        }
+        const nombre = limpiarTexto(body.nombre, 80);
+        const cargo = limpiarTexto(body.cargo, 80) || "Supervisor/a";
+        if (!nombre) return jsonRes({ ok: false, error: "El nombre es obligatorio" }, 400, origin);
+        const activo = body.activo === undefined ? 1 : (body.activo ? 1 : 0);
+        try {
+          const ins = await env.DB.prepare("INSERT INTO supervisores (nombre, cargo, activo) VALUES (?,?,?)")
+            .bind(nombre, cargo, activo).run();
+          return jsonRes({ ok: true, id: ins.meta.last_row_id }, 200, origin);
+        } catch (e) {
+          return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+        }
+      }
+      // PUT/DELETE /api/admin/supervisors/:id — solo ADMIN
+      m = p.match(/^\/api\/admin\/supervisors\/(\d+)$/);
+      if (m && request.method === "PUT") {
+        if (user.role_level > 1) return jsonRes({ ok: false, error: "No tienes permiso para esta acción" }, 403, origin);
+        let body;
+        try { body = await request.json(); } catch (e) {
+          return jsonRes({ ok: false, error: "JSON inválido" }, 400, origin);
+        }
+        const sets = []; const binds = [];
+        if (body.nombre !== undefined) {
+          const nombre = limpiarTexto(body.nombre, 80);
+          if (!nombre) return jsonRes({ ok: false, error: "El nombre es obligatorio" }, 400, origin);
+          sets.push("nombre=?"); binds.push(nombre);
+        }
+        if (body.cargo !== undefined) { sets.push("cargo=?"); binds.push(limpiarTexto(body.cargo, 80) || "Supervisor/a"); }
+        if (body.activo !== undefined) { sets.push("activo=?"); binds.push(body.activo ? 1 : 0); }
+        if (!sets.length) return jsonRes({ ok: false, error: "Nada que actualizar" }, 400, origin);
+        binds.push(Number(m[1]));
+        try {
+          await env.DB.prepare("UPDATE supervisores SET " + sets.join(", ") + " WHERE id=?").bind(...binds).run();
+          return jsonRes({ ok: true }, 200, origin);
+        } catch (e) {
+          return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+        }
+      }
+      if (m && request.method === "DELETE") {
+        if (user.role_level > 1) return jsonRes({ ok: false, error: "No tienes permiso para esta acción" }, 403, origin);
+        try {
+          // borrado lógico: se conserva el histórico de votos/comentarios
+          await env.DB.prepare("UPDATE supervisores SET activo=0 WHERE id=?").bind(Number(m[1])).run();
+          return jsonRes({ ok: true }, 200, origin);
+        } catch (e) {
+          return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+        }
+      }
+
+      // ============================================================
+      //  PUBLICACIONES (admin) — nivel ≤3 crea/edita; ocultar ≤2
+      // ============================================================
+      if (p === "/api/admin/posts" && request.method === "GET") {
+        try {
+          const rr = await env.DB.prepare("SELECT id, type, category, title, content, image_key, image_url, author, status, created_at FROM posts ORDER BY id DESC LIMIT 200").all();
+          return jsonRes({ ok: true, posts: (rr.results || []).map((x) => ({ ...x, status_activo: x.status === "activo" })) }, 200, origin);
+        } catch (e) {
+          return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+        }
+      }
+      if (p === "/api/admin/posts" && request.method === "POST") {
+        if (user.role_level > 3) return jsonRes({ ok: false, error: "No tienes permiso para esta acción" }, 403, origin);
+        let body;
+        try { body = await request.json(); } catch (e) {
+          return jsonRes({ ok: false, error: "JSON inválido" }, 400, origin);
+        }
+        const type = ["noticia", "aviso", "comunicado", "horario"].includes(body.type) ? body.type : "aviso";
+        const title = limpiarTexto(body.title, 150);
+        const content = limpiarParrafo(body.content, 2000);
+        const category = limpiarTexto(body.category, 40);
+        const author = limpiarTexto(body.author, 80) || user.display_name || user.username;
+        if (!title || !content) return jsonRes({ ok: false, error: "Título y contenido obligatorios" }, 400, origin);
+        try {
+          const ins = await env.DB.prepare(
+            "INSERT INTO posts (type, category, title, content, image_key, image_url, author, status) VALUES (?,?,?,?,?,?,?,'activo')"
+          ).bind(type, category, title, content, body.image_key || null, body.image_url || null, author).run();
+          return jsonRes({ ok: true, id: ins.meta.last_row_id }, 200, origin);
+        } catch (e) {
+          return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+        }
+      }
+      // PUT/DELETE /api/admin/posts/:id — editar ≤3, ocultar/borrar ≤2
+      m = p.match(/^\/api\/admin\/posts\/(\d+)$/);
+      if (m && request.method === "PUT") {
+        if (user.role_level > 3) return jsonRes({ ok: false, error: "No tienes permiso para esta acción" }, 403, origin);
+        let body;
+        try { body = await request.json(); } catch (e) {
+          return jsonRes({ ok: false, error: "JSON inválido" }, 400, origin);
+        }
+        const sets = []; const binds = [];
+        if (body.title !== undefined) { const t = limpiarTexto(body.title, 150); if (!t) return jsonRes({ ok: false, error: "Título vacío" }, 400, origin); sets.push("title=?"); binds.push(t); }
+        if (body.content !== undefined) { const c = limpiarParrafo(body.content, 2000); if (!c) return jsonRes({ ok: false, error: "Contenido vacío" }, 400, origin); sets.push("content=?"); binds.push(c); }
+        if (body.category !== undefined) { sets.push("category=?"); binds.push(limpiarTexto(body.category, 40)); }
+        if (body.status !== undefined && user.role_level <= 2) {
+          const st = ["activo", "inactivo", "hidden"].includes(body.status) ? body.status : "activo";
+          sets.push("status=?"); binds.push(st);
+        }
+        if (body.image_url !== undefined) { sets.push("image_url=?"); binds.push(limpiarTexto(body.image_url, 500) || null); }
+        if (!sets.length) return jsonRes({ ok: false, error: "Nada que actualizar" }, 400, origin);
+        binds.push(Number(m[1]));
+        try {
+          await env.DB.prepare("UPDATE posts SET " + sets.join(", ") + ", updated_at=datetime('now') WHERE id=?").bind(...binds).run();
+          return jsonRes({ ok: true }, 200, origin);
+        } catch (e) {
+          return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+        }
+      }
+      if (m && request.method === "DELETE") {
+        if (user.role_level > 2) return jsonRes({ ok: false, error: "No tienes permiso para esta acción" }, 403, origin);
+        try {
+          await env.DB.prepare("UPDATE posts SET status='inactivo', updated_at=datetime('now') WHERE id=?").bind(Number(m[1])).run();
+          return jsonRes({ ok: true }, 200, origin);
+        } catch (e) {
+          return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+        }
+      }
+
+      // ============================================================
+      //  ENCUESTAS (admin) — crear/editar/cerrar nivel ≤2
+      // ============================================================
+      if (p === "/api/admin/surveys" && request.method === "GET") {
+        try {
+          const rr = await env.DB.prepare("SELECT id, question, status, created_at FROM surveys ORDER BY id DESC LIMIT 100").all();
+          const encuestas = [];
+          for (const e of (rr.results || [])) {
+            const opts = (await env.DB.prepare("SELECT id, option_text FROM survey_options WHERE survey_id=? ORDER BY id").bind(e.id).all()).results || [];
+            const votos = (await env.DB.prepare("SELECT option_id, COUNT(*) n FROM survey_votes WHERE survey_id=? GROUP BY option_id").bind(e.id).all()).results || [];
+            const total = (await env.DB.prepare("SELECT COUNT(*) n FROM survey_votes WHERE survey_id=?").bind(e.id).first());
+            encuestas.push({ ...e, opciones: opts.map((o) => ({ ...o, votos: (votos.find((v) => v.option_id === o.id) || {}).n || 0 })), total_votos: (total && total.n) || 0 });
+          }
+          return jsonRes({ ok: true, encuestas }, 200, origin);
+        } catch (e) {
+          return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+        }
+      }
+      if (p === "/api/admin/surveys" && request.method === "POST") {
+        if (user.role_level > 2) return jsonRes({ ok: false, error: "No tienes permiso para esta acción" }, 403, origin);
+        let body;
+        try { body = await request.json(); } catch (e) {
+          return jsonRes({ ok: false, error: "JSON inválido" }, 400, origin);
+        }
+        const question = limpiarTexto(body.question, 300);
+        const options = Array.isArray(body.options)
+          ? body.options.map((o) => limpiarTexto(o, 150)).filter(Boolean).slice(0, 10)
+          : [];
+        if (!question || options.length < 2) {
+          return jsonRes({ ok: false, error: "Pregunta y al menos 2 opciones son obligatorias" }, 400, origin);
+        }
+        try {
+          const ins = await env.DB.prepare("INSERT INTO surveys (question) VALUES (?)").bind(question).run();
+          const sid = ins.meta.last_row_id;
+          for (const o of options) {
+            await env.DB.prepare("INSERT INTO survey_options (survey_id, option_text) VALUES (?,?)").bind(sid, o).run();
+          }
+          return jsonRes({ ok: true, id: sid }, 200, origin);
+        } catch (e) {
+          return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+        }
+      }
+      // PUT /api/admin/surveys/:id (editar pregunta/estado)
+      m = p.match(/^\/api\/admin\/surveys\/(\d+)$/);
+      if (m && request.method === "PUT") {
+        if (user.role_level > 2) return jsonRes({ ok: false, error: "No tienes permiso para esta acción" }, 403, origin);
+        let body;
+        try { body = await request.json(); } catch (e) {
+          return jsonRes({ ok: false, error: "JSON inválido" }, 400, origin);
+        }
+        const sets = []; const binds = [];
+        if (body.question !== undefined) { const q = limpiarTexto(body.question, 300); if (!q) return jsonRes({ ok: false, error: "Pregunta vacía" }, 400, origin); sets.push("question=?"); binds.push(q); }
+        if (body.status !== undefined) {
+          const st = ["activa", "cerrada"].includes(body.status) ? body.status : "activa";
+          sets.push("status=?"); binds.push(st);
+        }
+        if (!sets.length) return jsonRes({ ok: false, error: "Nada que actualizar" }, 400, origin);
+        binds.push(Number(m[1]));
+        try {
+          await env.DB.prepare("UPDATE surveys SET " + sets.join(", ") + ", updated_at=datetime('now') WHERE id=?").bind(...binds).run();
+          return jsonRes({ ok: true }, 200, origin);
+        } catch (e) {
+          return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+        }
+      }
+
+      // ============================================================
+      //  COMENTARIOS (moderación) — nivel ≤2
+      // ============================================================
+      if (p === "/api/admin/comments" && request.method === "GET") {
+        if (user.role_level > 2) return jsonRes({ ok: false, error: "No tienes permiso para esta acción" }, 403, origin);
+        try {
+          const rr = await env.DB.prepare(
+            "SELECT c.id, c.supervisor_id, c.post_id, c.content, c.status, c.created_at, s.nombre AS supervisor_nombre FROM comments c LEFT JOIN supervisores s ON s.id=c.supervisor_id ORDER BY c.id DESC LIMIT 200"
+          ).all();
+          return jsonRes({ ok: true, comentarios: (rr.results || []) }, 200, origin);
+        } catch (e) {
+          return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+        }
+      }
+      // PUT/DELETE /api/admin/comments/:id  {status: visible|hidden|deleted}
+      m = p.match(/^\/api\/admin\/comments\/(\d+)$/);
+      if (m && (request.method === "PUT" || request.method === "DELETE")) {
+        if (user.role_level > 2) return jsonRes({ ok: false, error: "No tienes permiso para esta acción" }, 403, origin);
+        try {
+          let status = "hidden";
+          if (request.method === "DELETE") {
+            status = "deleted";
+          } else {
+            let body = {};
+            try { body = await request.json(); } catch (e) { body = {}; }
+            if (["visible", "hidden", "deleted"].includes(body.status)) status = body.status;
+          }
+          await env.DB.prepare("UPDATE comments SET status=?, updated_at=datetime('now') WHERE id=?").bind(status, Number(m[1])).run();
+          return jsonRes({ ok: true }, 200, origin);
+        } catch (e) {
+          return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+        }
+      }
+
+      // ============================================================
+      //  ESTADÍSTICAS — cualquier usuario autenticado
+      // ============================================================
+      if (p === "/api/admin/stats" && request.method === "GET") {
+        try {
+          const cnt = async (sql) => { const r = await env.DB.prepare(sql).first(); return (r && r.n) || 0; };
+          const hoy = new Date().toISOString().slice(0, 10);
+          const semanaIni = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+          const mesIni = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+          const stats = {
+            visitas: {
+              hoy: await cnt("SELECT SUM(hits) n FROM visit_stats WHERE day='" + hoy + "'"),
+              semana: await cnt("SELECT SUM(hits) n FROM visit_stats WHERE day>='" + semanaIni + "'"),
+              mes: await cnt("SELECT SUM(hits) n FROM visit_stats WHERE day>='" + mesIni + "'"),
+              historico: await cnt("SELECT SUM(hits) n FROM visit_stats"),
+            },
+            supervisores: {
+              total: await cnt("SELECT COUNT(*) n FROM supervisores"),
+              activos: await cnt("SELECT COUNT(*) n FROM supervisores WHERE activo=1"),
+              likes: await cnt("SELECT COUNT(*) n FROM supervisor_votes WHERE vote_type='like'"),
+              dislikes: await cnt("SELECT COUNT(*) n FROM supervisor_votes WHERE vote_type='dislike'"),
+              comentarios: await cnt("SELECT COUNT(*) n FROM comments"),
+            },
+            encuestas: {
+              total: await cnt("SELECT COUNT(*) n FROM surveys"),
+              votos: await cnt("SELECT COUNT(*) n FROM survey_votes"),
+              activas: await cnt("SELECT COUNT(*) n FROM surveys WHERE status='activa'"),
+            },
+            publicaciones: {
+              total: await cnt("SELECT COUNT(*) n FROM posts"),
+              noticias: await cnt("SELECT COUNT(*) n FROM posts WHERE type='noticia'"),
+              avisos: await cnt("SELECT COUNT(*) n FROM posts WHERE type='aviso'"),
+              activas: await cnt("SELECT COUNT(*) n FROM posts WHERE status='activo'"),
+            },
+            comentarios_mod: {
+              total: await cnt("SELECT COUNT(*) n FROM comments"),
+              visibles: await cnt("SELECT COUNT(*) n FROM comments WHERE status='visible'"),
+              moderados: await cnt("SELECT COUNT(*) n FROM comments WHERE status!='visible'"),
+            },
+          };
+          return jsonRes({ ok: true, stats }, 200, origin);
+        } catch (e) {
+          return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+        }
+      }
+
+      return jsonRes({ ok: false, error: "Ruta no encontrada" }, 404, origin);
     }
 
     return jsonRes({ ok: false, error: "Ruta no encontrada" }, 404, origin);

@@ -193,7 +193,6 @@
       <p class="small muted">Valora a tu supervisor: 👍 like, 👎 dislike, o 💬 comenta.
       Un voto activo por persona · el ranking se calcula con los datos reales.</p>
       <div id="cmSupsBox"><p class="muted">Consultando…</p></div>
-      <div style="margin-top:6px"><button class="btn ghost small" onclick="comunidad.admin()">🔐 Administración</button></div>
     </div>`;
     const box = $("#cmSupsBox");
     const j = await cmSafe(async () =>
