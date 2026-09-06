@@ -36,10 +36,19 @@ const TABS_FORENSE = [["resumen", "Resumen"], ["endpoints", "🔌 Endpoints"], [
   ["javascript", "JavaScript"], ["signalr", "SignalR"], ["kg", "KG Integrity"], ["errores", "Errores"],
   ["consistencia", "Consistencia"], ["snapshots", "Snapshots"], ["hallazgos", "Hallazgos"],
   ["evidencias", "Evidencias"], ["informes", "Informes"]];
-const areaDeTab = (n) => (n === "qrdigital" || n === "qrkg" || n === "ranking") ? "empleados" : "forense";
+const areaDeTab = (n) => (n === "qrdigital" || n === "qrkg" || n === "ranking") ? "empleados"
+  : (n === "noticias" || n === "encuestas" || n === "supervisores") ? "comunidad" : "forense";
+const TABS_POR_AREA = {
+  empleados: [["qrdigital", "📱 QR DIGITAL"], ["qrkg", "🌾 COSECHA"], ["ranking", "🏆 RANKING"]],
+  comunidad: [["noticias", "📰 NOTICIAS"], ["encuestas", "📊 ENCUESTAS"], ["supervisores", "🏆 SUPERVISORES"]],
+  forense: [["resumen", "Resumen"], ["endpoints", "🔌 Endpoints"], ["network", "Network"],
+    ["javascript", "JavaScript"], ["signalr", "SignalR"], ["kg", "KG Integrity"], ["errores", "Errores"],
+    ["consistencia", "Consistencia"], ["snapshots", "Snapshots"], ["hallazgos", "Hallazgos"],
+    ["evidencias", "Evidencias"], ["informes", "Informes"]],
+};
 
 function renderNav() {
-  const lista = state.area === "empleados" ? TABS_EMPLEADOS : TABS_FORENSE;
+  const lista = TABS_POR_AREA[state.area] || TABS_POR_AREA.forense;
   const nav = $("#tabs");
   if (!nav) return;
   nav.innerHTML = lista.map(([t, lbl]) =>
@@ -61,7 +70,8 @@ function showArea(area, tab) {
   document.body.dataset.area = area;
   syncAreaButtons();
   renderNav();
-  return goTab(tab || (area === "empleados" ? "qrdigital" : "resumen"));
+  const def = area === "empleados" ? "qrdigital" : area === "comunidad" ? "noticias" : "resumen";
+  return goTab(tab || def);
 }
 
 /* ---- tema claro / oscuro (localStorage) ---- */
@@ -523,6 +533,11 @@ async function loadTab(name) {
   }
   switchPanel(name);
   if (name === "ranking") { cargarRanking(); return; }
+  // COMUNIDAD (noticias / encuestas / supervisores) — delegado a comunidad.js
+  if (name === "noticias" || name === "encuestas" || name === "supervisores") {
+    if (window.comunidad && window.comunidad.load) return window.comunidad.load(name);
+    return;
+  }
   if (staticMode && (name === "resumen" || name === "endpoints" || name === "network" || name === "javascript" ||
       name === "signalr" || name === "kg" || name === "errores" || name === "consistencia" || name === "snapshots" ||
       name === "hallazgos" || name === "evidencias" || name === "informes")) { estaticoForense(name); return; }

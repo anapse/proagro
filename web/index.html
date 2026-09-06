@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PROAGRO WEB — Empleados y Forense</title>
 <link rel="icon" type="image/png" href="assets/logo.png">
-<link rel="stylesheet" href="styles.css?v=40">
+<link rel="stylesheet" href="styles.css?v=41">
 </head>
 <body>
 <header class="top">
@@ -14,6 +14,7 @@
   </div>
   <nav class="areas" id="areas">
     <button data-area="empleados" class="active">👥 EMPLEADOS</button>
+    <button data-area="comunidad">💬 COMUNIDAD</button>
     <button data-area="forense">🔬 FORENSE</button>
   </nav>
   <div class="top-actions">
@@ -339,6 +340,11 @@ campos: hora/variedad/kgExportable/kgDescarte.</div>
     </div>
     <div id="repTableBox"></div>
   </section>
+
+  <!-- ====================== COMUNIDAD ====================== -->
+  <section id="panel-noticias" class="panel"></section>
+  <section id="panel-encuestas" class="panel"></section>
+  <section id="panel-supervisores" class="panel"></section>
 </main>
 
 <!-- modal genérico -->
@@ -371,6 +377,7 @@ campos: hora/variedad/kgExportable/kgDescarte.</div>
 <script src="vendor/jsqr.min.js?v=40"></script>
 <script src="vendor/qrcode.min.js"></script>
 <script src="qrparser.js?v=40"></script>
-<script src="app.js?v=40"></script>
+<script src="app.js?v=41"></script>
+<script src="comunidad.js?v=41"></script>
 </body>
 </html>

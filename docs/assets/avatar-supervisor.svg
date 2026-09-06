@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Avatar genérico de supervisor">
+  <defs>
+    <clipPath id="circ"><circle cx="100" cy="100" r="100"/></clipPath>
+  </defs>
+  <!-- Fondo del círculo -->
+  <rect width="200" height="200" fill="#14261c"/>
+  <circle cx="100" cy="100" r="98" fill="#1c3a2a" stroke="#2fbf71" stroke-width="3"/>
+  <g clip-path="url(#circ)">
+    <!-- ===== Silueta negra de la persona (cabeza + torso + brazos) ===== -->
+    <circle cx="100" cy="70" r="32" fill="#0b0b0b"/>
+    <path d="M58 200 Q60 128 100 116 Q140 128 142 200 Z" fill="#0b0b0b"/>
+    <!-- Brazos negros -->
+    <path d="M58 130 Q50 160 52 200 L66 200 Q64 165 70 142 Z" fill="#0b0b0b"/>
+    <path d="M142 130 Q150 160 148 200 L134 200 Q136 165 130 142 Z" fill="#0b0b0b"/>
+
+    <!-- ===== Chaleco de seguridad naranja sobre el torso ===== -->
+    <path d="M70 200 Q72 132 100 122 Q128 132 130 200 Z" fill="#ff7a1a"/>
+    <!-- Hombros del chaleco -->
+    <path d="M70 136 Q72 130 78 127 L78 140 Z" fill="#ff7a1a"/>
+    <path d="M130 136 Q128 130 122 127 L122 140 Z" fill="#ff7a1a"/>
+
+    <!-- ===== Franjas reflectivas ===== -->
+    <!-- Laterales del chaleco -->
+    <path d="M71 156 L79 156 L79 200 L71 200 Z" fill="#e6f2ff" opacity=".92"/>
+    <path d="M121 156 L129 156 L129 200 L121 200 Z" fill="#e6f2ff" opacity=".92"/>
+    <!-- Cintas diagonales pecho -->
+    <path d="M81 138 L90 150 L84 156 L75 144 Z" fill="#e6f2ff" opacity=".92"/>
+    <path d="M119 138 L110 150 L116 156 L125 144 Z" fill="#e6f2ff" opacity=".92"/>
+    <!-- Cinturón reflectivo -->
+    <rect x="72" y="178" width="56" height="9" fill="#e6f2ff" opacity=".92"/>
+
+    <!-- Cierre central -->
+    <rect x="97.5" y="136" width="5" height="64" fill="#0b0b0b"/>
+
+    <!-- ===== Texto SUPERVISOR vertical en el lado derecho del chaleco ===== -->
+    <g transform="rotate(90 116 178)">
+      <text x="116" y="181" font-family="Arial, Helvetica, sans-serif" font-size="13.5"
+            font-weight="800" fill="#0b0b0b" text-anchor="middle" letter-spacing="1.5">SUPERVISOR</text>
+    </g>
+
+    <!-- Cuello / sombra bajo la cabeza -->
+    <ellipse cx="100" cy="100" rx="14" ry="6" fill="#0b0b0b"/>
+  </g>
+</svg>
