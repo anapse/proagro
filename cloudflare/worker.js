@@ -1426,6 +1426,11 @@ export default {
           return jsonRes({ ok: false, error: "JSON inválido" }, 400, origin);
         }
         const sets = []; const binds = [];
+        if (body.type !== undefined) {
+          const tp = ["noticia", "aviso", "comunicado", "horario"].includes(body.type) ? body.type : null;
+          if (!tp) return jsonRes({ ok: false, error: "Tipo inválido" }, 400, origin);
+          sets.push("type=?"); binds.push(tp);
+        }
         if (body.title !== undefined) { const t = limpiarTexto(body.title, 150); if (!t) return jsonRes({ ok: false, error: "Título vacío" }, 400, origin); sets.push("title=?"); binds.push(t); }
         if (body.content !== undefined) { const c = limpiarParrafo(body.content, 2000); if (!c) return jsonRes({ ok: false, error: "Contenido vacío" }, 400, origin); sets.push("content=?"); binds.push(c); }
         if (body.category !== undefined) { sets.push("category=?"); binds.push(limpiarTexto(body.category, 40)); }

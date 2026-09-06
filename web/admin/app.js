@@ -213,10 +213,15 @@ async function verSupervisores(sec) {
 }
 
 // ============================================================
-//  PUBLICACIONES
+//  PUBLICACIONES — crear, editar (✏️), ocultar/publicar
 // ============================================================
+let postEditando = null; // id de la publicación en edición (null = crear)
+let postsCache = {};     // id -> publicación (para editar sin otra petición)
+
 async function verPublicaciones(sec) {
   const j = await api("/api/admin/posts");
+  postsCache = {};
+  (j.posts || []).forEach((p) => { postsCache[p.id] = p; });
   const puedeEscribir = USER.role_level <= 3;
   const puedeOcultar = USER.role_level <= 2;
   const filas = (j.posts || []).map((p) => `<tr>
@@ -224,10 +229,13 @@ async function verPublicaciones(sec) {
     <td><b>${esc(p.title)}</b></td>
     <td>${p.status === "activo" ? '<span class="chip" style="color:#4ade80">activo</span>' : '<span class="chip" style="color:var(--muted)">' + esc(p.status) + '</span>'}</td>
     <td class="small muted">${esc((p.created_at || "").slice(0, 16))}</td>
-    <td style="white-space:nowrap">${puedeOcultar ? `<button class="btn small warn" onclick="ADM.togglePost(${p.id}, '${p.status}')">${p.status === "activo" ? "Ocultar" : "Publicar"}</button>` : ""}</td></tr>`).join("");
+    <td style="white-space:nowrap">
+      ${puedeEscribir ? `<button class="btn small" onclick="ADM.editarPost(${p.id})" title="Editar">✏️ Editar</button>` : ""}
+      ${puedeOcultar ? `<button class="btn small warn" onclick="ADM.togglePost(${p.id}, '${p.status}')">${p.status === "activo" ? "Ocultar" : "Publicar"}</button>` : ""}
+    </td></tr>`).join("");
   const tipos = `<option value="aviso">📢 Aviso oficial</option><option value="noticia">📰 Noticia</option><option value="comunicado">📢 Comunicado</option><option value="horario">📅 Cambio de horario</option>`;
   sec.innerHTML = `<h2>📰 PUBLICACIONES</h2>
-    ${puedeEscribir ? `<div class="cardbox"><h3>＋ Nueva publicación</h3>
+    ${puedeEscribir ? `<div class="cardbox"><h3 id="admPostH3">＋ Nueva publicación</h3>
       <div class="grid2">
         <div><label>Tipo</label><select id="admPostTipo" class="inp" style="width:100%">${tipos}</select></div>
         <div><label>Categoría (opcional)</label><input id="admPostCat" class="inp" style="width:100%" maxlength="40" placeholder="Ej. Horario"></div>
@@ -235,12 +243,16 @@ async function verPublicaciones(sec) {
       <label>Título</label><input id="admPostTitulo" class="inp" style="width:100%" maxlength="150" placeholder="Título">
       <label>Contenido</label><textarea id="admPostTexto" class="inp" style="width:100%" rows="3" maxlength="2000" placeholder="Redacta…"></textarea>
       <p class="small muted">Imagen: disponible cuando R2 esté configurado (no rompe nada mientras tanto).</p>
-      <button class="btn primary" id="admPostPub" style="margin-top:8px">📤 PUBLICAR</button>
+      <div class="actions" style="justify-content:flex-start">
+        <button class="btn primary" id="admPostPub" style="margin-top:8px">📤 PUBLICAR</button>
+        <button class="btn ghost" id="admPostCancelar" style="margin-top:8px;display:none">Cancelar edición</button>
+      </div>
       <div id="admPostMsg" class="small"></div></div>` : ""}
     <div class="cardbox"><div class="tblwrap"><table class="tbl">
       <thead><tr><th>Tipo</th><th>Título</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
       <tbody>${filas || '<tr><td colspan="5" class="muted">Sin publicaciones</td></tr>'}</tbody></table></div></div>`;
   const pub = $("#admPostPub");
+  const cancelar = $("#admPostCancelar");
   if (pub) pub.onclick = async () => {
     const msg = $("#admPostMsg");
     const title = ($("#admPostTitulo").value || "").trim();
@@ -248,15 +260,40 @@ async function verPublicaciones(sec) {
     if (!title || !content) { msg.textContent = "Título y contenido obligatorios."; msg.style.color = "var(--warn)"; return; }
     pub.disabled = true;
     try {
-      await api("/api/admin/posts", {
-        method: "POST",
-        body: JSON.stringify({
-          type: $("#admPostTipo").value, category: $("#admPostCat").value.trim(),
-          title, content, author: USER.display_name || USER.username,
-        }),
-      });
+      if (postEditando) {
+        // editar publicación existente (PUT)
+        await api("/api/admin/posts/" + postEditando, {
+          method: "PUT",
+          body: JSON.stringify({
+            type: $("#admPostTipo").value,
+            category: $("#admPostCat").value.trim(),
+            title, content,
+          }),
+        });
+        postEditando = null;
+      } else {
+        // crear publicación nueva (POST)
+        await api("/api/admin/posts", {
+          method: "POST",
+          body: JSON.stringify({
+            type: $("#admPostTipo").value, category: $("#admPostCat").value.trim(),
+            title, content, author: USER.display_name || USER.username,
+          }),
+        });
+      }
       irSeccion("publicaciones");
     } catch (e) { msg.textContent = "❌ " + e.message; msg.style.color = "var(--danger)"; pub.disabled = false; }
+  };
+  if (cancelar) cancelar.onclick = () => {
+    postEditando = null;
+    cancelar.style.display = "none";
+    $("#admPostH3").textContent = "＋ Nueva publicación";
+    $("#admPostPub").textContent = "📤 PUBLICAR";
+    $("#admPostTitulo").value = "";
+    $("#admPostTexto").value = "";
+    $("#admPostCat").value = "";
+    $("#admPostTipo").value = "aviso";
+    const msg = $("#admPostMsg"); if (msg) { msg.textContent = ""; }
   };
 }
 
@@ -457,6 +494,24 @@ window.ADM = {
   togglePost(id, status) {
     api("/api/admin/posts/" + id, { method: "PUT", body: JSON.stringify({ status: status === "activo" ? "inactivo" : "activo" }) })
       .then(() => irSeccion("publicaciones")).catch((e) => alert("❌ " + e.message));
+  },
+  editarPost(id) {
+    const p = postsCache[id];
+    if (!p) { alert("No se pudo cargar la publicación."); return; }
+    postEditando = id;
+    const h3 = $("#admPostH3"), pub = $("#admPostPub"), can = $("#admPostCancelar");
+    if (h3) h3.textContent = "✏️ Editando publicación #" + id;
+    if (pub) pub.textContent = "💾 GUARDAR CAMBIOS";
+    if (can) can.style.display = "";
+    const tipo = $("#admPostTipo"), cat = $("#admPostCat"), tit = $("#admPostTitulo"), txt = $("#admPostTexto"), msg = $("#admPostMsg");
+    if (tipo) tipo.value = ["noticia", "aviso", "comunicado", "horario"].includes(p.type) ? p.type : "aviso";
+    if (cat) cat.value = p.category || "";
+    if (tit) tit.value = p.title || "";
+    if (txt) txt.value = p.content || "";
+    if (msg) { msg.textContent = "Editando. Cambia lo que necesites y pulsa GUARDAR CAMBIOS."; msg.style.color = "var(--accent)"; }
+    // subir hasta el formulario
+    const f = document.querySelector("#admPostH3");
+    if (f) f.scrollIntoView({ behavior: "smooth", block: "center" });
   },
   toggleSurvey(id, status) {
     api("/api/admin/surveys/" + id, { method: "PUT", body: JSON.stringify({ status: status === "activa" ? "cerrada" : "activa" }) })
