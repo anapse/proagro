@@ -231,7 +231,7 @@ async function verPublicaciones(sec) {
     <td class="small muted">${esc((p.created_at || "").slice(0, 16))}</td>
     <td style="white-space:nowrap">
       ${puedeEscribir ? `<button class="btn small" onclick="ADM.editarPost(${p.id})" title="Editar">✏️ Editar</button>` : ""}
-      ${puedeOcultar ? `<button class="btn small warn" onclick="ADM.togglePost(${p.id}, '${p.status}')">${p.status === "activo" ? "Ocultar" : "Publicar"}</button>` : ""}
+      ${puedeOcultar ? `<button class="btn small warn" onclick="ADM.eliminarPost(${p.id})" title="Eliminar">🗑 Eliminar</button>` : ""}
     </td></tr>`).join("");
   const tipos = `<option value="aviso">📢 Aviso oficial</option><option value="noticia">📰 Noticia</option><option value="comunicado">📢 Comunicado</option><option value="horario">📅 Cambio de horario</option>`;
   sec.innerHTML = `<h2>📰 PUBLICACIONES</h2>
@@ -512,6 +512,13 @@ window.ADM = {
     // subir hasta el formulario
     const f = document.querySelector("#admPostH3");
     if (f) f.scrollIntoView({ behavior: "smooth", block: "center" });
+  },
+  eliminarPost(id) {
+    const p = postsCache[id];
+    const titulo = p ? p.title : ("#" + id);
+    if (!confirm("🗑 ¿Eliminar la publicación \"" + titulo + "\"?\nSe quitará de la Comunidad pública (se puede volver a publicar después desde el panel).")) return;
+    api("/api/admin/posts/" + id, { method: "DELETE" })
+      .then(() => irSeccion("publicaciones")).catch((e) => alert("❌ " + e.message));
   },
   toggleSurvey(id, status) {
     api("/api/admin/surveys/" + id, { method: "PUT", body: JSON.stringify({ status: status === "activa" ? "cerrada" : "activa" }) })
