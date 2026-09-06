@@ -419,6 +419,13 @@ export default {
         const lista = (await env.DB.prepare(SQL_SUPERVISORES + " WHERE s.activo=1 ORDER BY s.nombre").all()).results || [];
         const votos = await supervisorVotos(env, origin);
         const ranking = armarRanking(lista, votos);
+        // conteo REAL de comentarios visibles por supervisor (D1)
+        const cc = await env.DB.prepare(
+          "SELECT supervisor_id, COUNT(*) n FROM comments WHERE supervisor_id IS NOT NULL AND status='visible' GROUP BY supervisor_id"
+        ).all();
+        const comentPorSup = {};
+        for (const row of (cc.results || [])) comentPorSup[row.supervisor_id] = row.n;
+        for (const s of ranking) s.comentarios = comentPorSup[s.id] || 0;
         // voto del votante actual (para marcar botones)
         const voterId = (url.searchParams.get("voter_id") || "").trim();
         let miVoto = {};

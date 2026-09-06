@@ -187,6 +187,10 @@
   // ============================================================
   //  SUPERVISORES (ranking + tarjetas sociales)
   // ============================================================
+  // Caché en memoria de los supervisores visibles (para el modal
+  // de comentarios: nombre/cargo/estadísticas exactas del elegido).
+  let supCache = {};
+
   CM.supervisores = async function () {
     const panel = $("#panel-supervisores"); if (!panel) return;
     panel.innerHTML = `<div class="qr-sec"><h2>🏆 SUPERVISORES MÁS VOTADOS</h2>
@@ -204,31 +208,44 @@
       box.innerHTML = `<div class="cardbox"><p class="muted">Todavía no hay supervisores registrados.</p></div>`;
       return;
     }
+    supCache = {};
+    sups.forEach((s) => { supCache[s.id] = s; });
     box.innerHTML = `<div class="cm-grid">` + sups.map(s => {
       const pct = (s.total_votos > 0) ? s.porcentaje_positivo : null;
       const voto = miVoto[s.id];
       const likeCls = voto === "like" ? " cm-vote-on" : "";
       const disCls = voto === "dislike" ? " cm-vote-on" : "";
       const total = (s.likes || 0) + (s.dislikes || 0);
+      const coms = s.comentarios || 0;
       const nombre = esc(s.nombre || "—");
       const cargo = esc(s.cargo || "Supervisor/a");
+      const med = s.puesto === 1 ? "🥇" : s.puesto === 2 ? "🥈" : s.puesto === 3 ? "🥉" : "";
+      const badgePos = med
+        ? `<span class="cm-puesto-med">${med}</span>`
+        : `<span class="cm-puesto-num">#${s.puesto}</span>`;
       return `<div class="cm-card" data-sup="${s.id}">
-        <div class="cm-puesto">${medalla(s.puesto)} <span class="small muted">#${s.puesto}</span></div>
-        <img class="cm-avatar" src="assets/avatar-supervisor.svg" alt="Avatar genérico de supervisor" width="120" height="120">
+        <div class="cm-card-top">
+          <div class="cm-pos">${badgePos}<span class="cm-pos-txt">Puesto ${s.puesto}</span></div>
+          <span class="cm-pct-chip">${pct != null ? `👍 ${pct}% positivo` : "Sin votos"}</span>
+        </div>
+        <div class="cm-foto">
+          <img class="cm-avatar" src="assets/avatar-supervisor.png" alt="Avatar de ${nombre}" loading="lazy" width="120" height="120">
+          <span class="cm-foto-ring"></span>
+        </div>
         <div class="cm-nombre">${nombre}</div>
         <div class="cm-cargo">${cargo}</div>
         <div class="cm-stats">
-          <span title="Likes">👍 <b id="cmLikes${s.id}">${s.likes || 0}</b></span>
-          <span title="Dislikes">👎 <b id="cmDislikes${s.id}">${s.dislikes || 0}</b></span>
-          <span title="Comentarios">💬 <b>${s.comentarios || 0}</b></span>
+          <span class="cm-stat cm-stat-up" title="Likes"><i>👍</i><b id="cmLikes${s.id}">${s.likes || 0}</b></span>
+          <span class="cm-stat cm-stat-down" title="Dislikes"><i>👎</i><b id="cmDislikes${s.id}">${s.dislikes || 0}</b></span>
+          <span class="cm-stat cm-stat-com" title="Comentarios"><i>💬</i><b id="cmComs${s.id}">${coms}</b></span>
         </div>
-        ${pct != null ? `<div class="cm-pct">Valoración positiva: <b>${pct}%</b> <span class="small muted">(${total} votos)</span></div>` : `<div class="cm-pct small muted">Sin votos todavía</div>`}
+        ${pct != null ? `<div class="cm-pct small muted">Valoración positiva: <b>${pct}%</b> · ${total} voto${total === 1 ? "" : "s"}</div>` : ""}
         <div class="cm-actions">
-          <button class="btn cm-vote ${likeCls}" id="cmLike${s.id}" data-sup="${s.id}" data-tipo="like">👍 LIKE</button>
-          <button class="btn cm-vote ${disCls}" id="cmDislike${s.id}" data-sup="${s.id}" data-tipo="dislike">👎 DISLIKE</button>
-          <button class="btn ghost" onclick="comunidad.comentariosSupervisor(${s.id})">💬 COMENTAR</button>
+          <button class="btn cm-vote cm-vote-like ${likeCls}" id="cmLike${s.id}" data-sup="${s.id}" data-tipo="like">👍 LIKE</button>
+          <button class="btn cm-vote cm-vote-dis ${disCls}" id="cmDislike${s.id}" data-sup="${s.id}" data-tipo="dislike">👎 DISLIKE</button>
         </div>
-        <div class="small" id="cmVoteMsg${s.id}"></div>
+        <button class="btn cm-comentar" onclick="comunidad.comentariosSupervisor(${s.id})">💬 COMENTAR</button>
+        <div class="small cm-msg" id="cmVoteMsg${s.id}"></div>
       </div>`;
     }).join("") + `</div>`;
     // bindear votos (delegación)
@@ -251,11 +268,12 @@
               : "🔄 Voto actualizado.";
             msg.style.color = "var(--accent)";
           }
-          // refresca estados de botones sin recargar todo
+          // refresca estados de botones y caché sin recargar todo
           box.querySelectorAll("button.cm-vote").forEach(x => {
             x.classList.remove("cm-vote-on");
             if (res.mi_voto && x.dataset.sup === sup && x.dataset.tipo === res.mi_voto) x.classList.add("cm-vote-on");
           });
+          if (supCache[sup]) { supCache[sup].likes = res.likes; supCache[sup].dislikes = res.dislikes; }
         } catch (err) {
           if (msg) { msg.textContent = "❌ " + err.message; msg.style.color = "var(--danger)"; }
         }
@@ -263,6 +281,29 @@
       };
     });
   };
+
+  // Actualiza el contador de comentarios de una tarjeta y el modal
+  // con el valor real que devuelve D1 (sin recargar la página).
+  async function refrescarComentariosSup(supId) {
+    try {
+      const j = await cmFetch("/api/community/supervisors?voter_id=" + encodeURIComponent(voterId));
+      const s = (j.supervisores || []).find((x) => x.id === supId);
+      if (!s) return;
+      if (supCache[supId]) supCache[supId] = s;
+      const n = s.comentarios || 0;
+      const elCard = $("#cmComs" + supId);
+      if (elCard) elCard.textContent = n;
+      const elModal = $("#cmModalComs");
+      if (elModal) elModal.textContent = n;
+      const lb = $("#cmLikes" + supId), db = $("#cmDislikes" + supId);
+      if (lb) lb.textContent = s.likes || 0;
+      if (db) db.textContent = s.dislikes || 0;
+      const lm = $("#cmModalLikes");
+      if (lm) lm.textContent = s.likes || 0;
+      const dm = $("#cmModalDislikes");
+      if (dm) dm.textContent = s.dislikes || 0;
+    } catch (e) { /* silencioso: el modal ya muestra su estado */ }
+  }
 
   // ============================================================
   //  COMENTARIOS (modal / bottom-sheet)
@@ -302,23 +343,74 @@
     };
   }
   function renderComentarios(lista) {
-    if (!lista || !lista.length) return `<div class="cardbox"><p class="muted">💬 Sin comentarios todavía. Sé el primero.</p></div>`;
+    if (!lista || !lista.length) return `<div class="cardbox cm-com-empty"><p class="muted">💬 Sin comentarios todavía. Sé el primero.</p></div>`;
     return lista.map(c =>
       `<div class="cm-com"><div class="cm-com-head"><b>👤 Trabajador</b>
         <span class="small muted">${fmtFecha(c.created_at)}</span></div>
         <p class="cm-com-txt">${esc(c.content)}</p></div>`).join("");
   }
+
+  // Modal ESPECÍFICO del supervisor elegido: resumen (imagen, nombre,
+  // cargo, 👍/👎/💬) + comentarios + campo para escribir. El id recibido
+  // es el del supervisor cuyo botón COMENTAR se pulsó (nunca otro).
   CM.comentariosSupervisor = function (supId) {
-    modalComentarios("Comentarios",
-      async () => {
-        const j = await cmFetch("/api/community/supervisors/" + supId + "/comments");
-        return renderComentarios(j.comentarios);
-      },
-      async (t) => {
+    const sup = supCache[supId] || {};
+    const nombre = esc(sup.nombre || "Supervisor");
+    const cargo = esc(sup.cargo || "Supervisor/a");
+    openModal(`<div class="cm-modal-hd">
+        <h2>💬 Comentarios</h2>
+        <button class="cm-modal-x" onclick="closeModal()" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="cm-modal-sup">
+        <img class="cm-modal-avatar" src="assets/avatar-supervisor.png" alt="Avatar de ${nombre}" width="72" height="72">
+        <div class="cm-modal-supinfo">
+          <div class="cm-modal-nombre">${nombre}</div>
+          <div class="cm-modal-cargo">${cargo}</div>
+          <div class="cm-modal-stats">
+            <span class="cm-stat cm-stat-up"><i>👍</i><b id="cmModalLikes">${sup.likes || 0}</b></span>
+            <span class="cm-stat cm-stat-down"><i>👎</i><b id="cmModalDislikes">${sup.dislikes || 0}</b></span>
+            <span class="cm-stat cm-stat-com"><i>💬</i><b id="cmModalComs">${sup.comentarios || 0}</b></span>
+          </div>
+        </div>
+      </div>
+      <div class="cm-modal-sep">💬 Comentarios</div>
+      <div id="cmComList" class="cm-com-list"><p class="muted">Cargando comentarios…</p></div>
+      <textarea id="cmComTxt" class="inp cm-com-txt" maxlength="500" rows="2"
+        placeholder="Escribe un comentario..."></textarea>
+      <div id="cmComMsg" class="small"></div>
+      <div class="cm-modal-actions">
+        <button class="btn cm-comentar" id="cmComPub">📤 PUBLICAR COMENTARIO</button>
+      </div>`);
+    const list = $("#cmComList");
+    const msg = $("#cmComMsg");
+    const cargar = async () => {
+      const j = await cmFetch("/api/community/supervisors/" + supId + "/comments");
+      return renderComentarios(j.comentarios);
+    };
+    cargar().then(html => { if (list) list.innerHTML = html; })
+      .catch(e => { if (list) list.innerHTML = `<p class="muted">❌ ${esc(e.message)}</p>`; });
+    const pub = $("#cmComPub");
+    if (pub) pub.onclick = async () => {
+      const txt = $("#cmComTxt");
+      const t = (txt ? txt.value : "").trim();
+      if (!t) { if (msg) { msg.textContent = "Escribe un comentario primero."; msg.style.color = "var(--warn)"; } return; }
+      if (t.length > 500) { if (msg) { msg.textContent = "Máximo 500 caracteres."; msg.style.color = "var(--warn)"; } return; }
+      pub.disabled = true;
+      try {
         await cmFetch("/api/community/supervisors/" + supId + "/comments", {
           method: "POST", body: JSON.stringify({ voter_id: voterId, content: t }),
         });
-      });
+        if (msg) { msg.textContent = "✅ Comentario publicado."; msg.style.color = "var(--accent)"; }
+        if (txt) txt.value = "";
+        const html = await cargar();
+        if (list) list.innerHTML = html;
+        // contador real desde D1 (tarjeta + modal), sin recargar la página
+        await refrescarComentariosSup(supId);
+      } catch (e) {
+        if (msg) { msg.textContent = "❌ " + e.message; msg.style.color = "var(--danger)"; }
+      }
+      pub.disabled = false;
+    };
   };
   CM.comentariosPost = function (postId) {
     modalComentarios("Comentarios",
