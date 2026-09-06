@@ -412,6 +412,22 @@ export default {
      * ============================================================ */
     const p = url.pathname;
 
+    // ----- POST /api/community/visit  (contador de visitas)
+    // El frontend llama UNA vez por dispositivo y día (flag en localStorage);
+    // aquí solo se suma +1 al día actual (UPSERT).
+    if (p === "/api/community/visit" && request.method === "POST") {
+      if (!necesitaDb(env)) return jsonRes({ ok: false, error: "D1 no configurado en el Worker" }, 503, origin);
+      try {
+        const dia = new Date().toISOString().slice(0, 10);
+        await env.DB.prepare(
+          "INSERT INTO visit_stats (day, hits) VALUES (?, 1) ON CONFLICT(day) DO UPDATE SET hits = hits + 1"
+        ).bind(dia).run();
+        return jsonRes({ ok: true }, 200, origin);
+      } catch (e) {
+        return jsonRes({ ok: false, error: "Error de base de datos: " + e.message }, 500, origin);
+      }
+    }
+
     // ----- GET /api/community/supervisors  (+ ?voter_id=) -----
     if (p === "/api/community/supervisors" && request.method === "GET") {
       if (!necesitaDb(env)) return jsonRes({ ok: false, error: "D1 no configurado en el Worker" }, 503, origin);

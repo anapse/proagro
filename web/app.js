@@ -2272,6 +2272,26 @@ function iniciarBienvenida() {
   }, 450);
 }
 (function initExtras() {
+  // ---- contador de visitas: 1 por dispositivo y día (flag en localStorage) ----
+  try {
+    const hoy = new Date();
+    const dd = String(hoy.getDate()).padStart(2, "0");
+    const mm = String(hoy.getMonth() + 1).padStart(2, "0");
+    const dia = hoy.getFullYear() + "-" + mm + "-" + dd;
+    if (localStorage.getItem("proagro_visit_day") !== dia) {
+      const wu = (workerUrl || "").trim().replace(/\/$/, "");
+      if (wu) {
+        const vid = (localStorage.getItem("community_voter_id") || "").trim();
+        fetch(wu + "/api/community/visit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(vid ? { voter_id: vid } : {}),
+        }).then((r) => {
+          if (r.ok) { try { localStorage.setItem("proagro_visit_day", dia); } catch (e) {} }
+        }).catch(() => {});
+      }
+    }
+  } catch (e) {}
   const bShare = $("#btnShare"), shNat = $("#shNative");
   if (bShare) {
     bShare.onclick = (e) => { e.stopPropagation(); alternarMenuShare(); };
