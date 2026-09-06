@@ -666,3 +666,13 @@ body[data-static="1"] #btnAnalyze,body[data-static="1"] #btnConcurrency,
 body[data-static="1"] #btnAuditLog,body[data-static="1"] #btnGenReport,
 body[data-static="1"] #btnOpenSnapshot,body[data-static="1"] #btnQrDebug{display:none!important}
 body[data-static="1"] header.top{position:relative}
+
+/* ============ 🏆 RANKING: pestañas Ranking / Buscar ============ */
+.rank-chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 14px}
+.rank-chips .btn{min-height:40px}
+.rank-tbl tbody tr{cursor:pointer}
+.rank-tbl tbody tr:hover{background:var(--hover,#eef4ef)}
+[data-theme="dark"] .rank-tbl tbody tr:hover{background:var(--hover,#223128)}
+.rk-pos{font-weight:800;color:var(--accent)}
+.rk-det{margin-top:12px;border:1px solid var(--border);box-shadow:0 6px 18px rgba(0,0,0,.06)}
+.rk-busca input{max-width:520px}
