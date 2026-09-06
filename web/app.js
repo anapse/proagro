@@ -2238,21 +2238,22 @@ function alternarMenuShare() {
   m.classList.toggle("hidden");
 }
 function ocultarMenuShare() { const m = $("#shareMenu"); if (m) m.classList.add("hidden"); }
+let _welAuto = null;
 function cerrarBienvenida() {
   const ov = $("#welcomeOv"); if (!ov) return;
+  if (_welAuto) { clearTimeout(_welAuto); _welAuto = null; }
   ov.classList.remove("show");
   document.body.style.overflow = "";
   setTimeout(() => ov.classList.add("hidden"), 320);
-  try { localStorage.setItem("pwf_upd_v1", "1"); } catch (e) { }
 }
 function iniciarBienvenida() {
   const ov = $("#welcomeOv"); if (!ov) return;
-  const visto = (() => { try { return localStorage.getItem("pwf_upd_v1") === "1"; } catch (e) { return false; } })();
-  if (visto) return;
+  // El aviso sale SIEMPRE en cada visita (nada de localStorage).
   setTimeout(() => {
     ov.classList.remove("hidden");
     document.body.style.overflow = "hidden";
     requestAnimationFrame(() => requestAnimationFrame(() => ov.classList.add("show")));
+    _welAuto = setTimeout(cerrarBienvenida, 5000);   // se cierra solo a los 5 s
   }, 450);
 }
 (function initExtras() {
@@ -2266,9 +2267,8 @@ function iniciarBienvenida() {
   }
   if (shNat) { if (navigator.share) shNat.classList.remove("hidden"); shNat.onclick = shareApp; }
   const shCopy = $("#shCopy"); if (shCopy) shCopy.onclick = copiarLink;
-  const wOk = $("#welOk"), wX = $("#welX"), wSh = $("#welShare");
-  if (wOk) wOk.onclick = cerrarBienvenida;
-  if (wX) wX.onclick = cerrarBienvenida;
-  if (wSh) wSh.onclick = shareApp;
+  const wSh = $("#welShare"), wOv = $("#welcomeOv");
+  if (wSh) wSh.onclick = (e) => { e.stopPropagation(); shareApp(); cerrarBienvenida(); };
+  if (wOv) wOv.addEventListener("click", () => cerrarBienvenida());  // clic en cualquier lado cierra
   iniciarBienvenida();
 })();

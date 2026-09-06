@@ -715,3 +715,7 @@ body[data-static="1"] header.top{position:relative}
   .welc-card h2{font-size:19px}
 }
 @media(min-width:1200px){.welc-card{max-width:700px}}
+
+/* Bienvenida: sin botón de cerrar; se cierra con clic en cualquier lado o a los 5 s */
+.welc-x,.welc-ok{display:none}
+.welc-card{cursor:pointer}
