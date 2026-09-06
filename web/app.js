@@ -2192,3 +2192,83 @@ async function qrkgRefreshHistory() {
 }
 
 boot();
+
+/* ============================================================
+   ✨ Mejoras de UI: overlay de bienvenida + botón COMPARTIR
+   (aditivo; no altera COSECHA/RANKING/QR/FORENSE ni APIs)
+   ============================================================ */
+function urlActual() {
+  return location.href.split("#")[0] || location.href;
+}
+let _toastT = null;
+function toastShow(msg) {
+  const t = $("#toast"); if (!t) return;
+  t.textContent = msg;
+  t.classList.remove("hidden");
+  if (_toastT) clearTimeout(_toastT);
+  _toastT = setTimeout(() => t.classList.add("hidden"), 2000);
+}
+function copiarLink() {
+  const url = urlActual();
+  const ok = () => { toastShow("✅ Link copiado"); ocultarMenuShare(); };
+  const fallback = () => {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = url; ta.style.cssText = "position:fixed;opacity:0";
+      document.body.appendChild(ta); ta.select();
+      document.execCommand("copy"); ta.remove(); ok();
+    } catch (e) { toastShow("No se pudo copiar el link", true); }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(ok).catch(fallback);
+  } else fallback();
+}
+function shareApp() {
+  const url = urlActual();
+  const texto = "📱 PROAGRO WEB\n\nConsulta tus cosechas, ranking, QR Digital, promedios y nuevas herramientas.\n\nIngresa aquí:\n" + url;
+  if (navigator.share) {
+    navigator.share({ title: "PROAGRO WEB", text: texto, url: url }).catch(() => { });
+  } else {
+    copiarLink();
+  }
+  ocultarMenuShare();
+}
+function alternarMenuShare() {
+  const m = $("#shareMenu"); if (!m) return;
+  m.classList.toggle("hidden");
+}
+function ocultarMenuShare() { const m = $("#shareMenu"); if (m) m.classList.add("hidden"); }
+function cerrarBienvenida() {
+  const ov = $("#welcomeOv"); if (!ov) return;
+  ov.classList.remove("show");
+  document.body.style.overflow = "";
+  setTimeout(() => ov.classList.add("hidden"), 320);
+  try { localStorage.setItem("pwf_upd_v1", "1"); } catch (e) { }
+}
+function iniciarBienvenida() {
+  const ov = $("#welcomeOv"); if (!ov) return;
+  const visto = (() => { try { return localStorage.getItem("pwf_upd_v1") === "1"; } catch (e) { return false; } })();
+  if (visto) return;
+  setTimeout(() => {
+    ov.classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+    requestAnimationFrame(() => requestAnimationFrame(() => ov.classList.add("show")));
+  }, 450);
+}
+(function initExtras() {
+  const bShare = $("#btnShare"), shNat = $("#shNative");
+  if (bShare) {
+    bShare.onclick = (e) => { e.stopPropagation(); alternarMenuShare(); };
+    document.addEventListener("click", (e) => {
+      const m = $("#shareMenu");
+      if (m && !m.contains(e.target) && e.target !== bShare && !bShare.contains(e.target)) ocultarMenuShare();
+    });
+  }
+  if (shNat) { if (navigator.share) shNat.classList.remove("hidden"); shNat.onclick = shareApp; }
+  const shCopy = $("#shCopy"); if (shCopy) shCopy.onclick = copiarLink;
+  const wOk = $("#welOk"), wX = $("#welX"), wSh = $("#welShare");
+  if (wOk) wOk.onclick = cerrarBienvenida;
+  if (wX) wX.onclick = cerrarBienvenida;
+  if (wSh) wSh.onclick = shareApp;
+  iniciarBienvenida();
+})();

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PROAGRO WEB — Empleados y Forense</title>
 <link rel="icon" type="image/png" href="assets/logo.png">
-<link rel="stylesheet" href="styles.css?v=38">
+<link rel="stylesheet" href="styles.css?v=39">
 </head>
 <body>
 <header class="top">
@@ -18,6 +18,11 @@
   </nav>
   <div class="top-actions">
     <button id="btnTheme" class="btn ghost small" title="Tema claro/oscuro">🌙</button>
+    <button id="btnShare" class="btn ghost small" title="Compartir PROAGRO WEB">↗️ COMPARTIR</button>
+    <div id="shareMenu" class="share-menu hidden">
+      <button id="shNative" class="share-item hidden">📱 Compartir</button>
+      <button id="shCopy" class="share-item">📋 Copiar link</button>
+    </div>
     <span class="forense-tools">
       <button id="btnQrDebug" class="btn ghost small" title="Diagnóstico técnico (solo FORENSE)">🔧 DEBUG</button>
       <select id="selProject" title="Proyecto"></select>
@@ -341,9 +346,31 @@ campos: hora/variedad/kgExportable/kgDescarte.</div>
   <div class="modal-box" id="modalBox"></div>
 </div>
 
-<script src="vendor/jsqr.min.js?v=38"></script>
+<div id="welcomeOv" class="welc-ov hidden" role="dialog" aria-modal="true">
+  <div class="welc-card">
+    <button id="welX" class="welc-x" title="Cerrar">✖</button>
+    <div class="welc-rocket">🚀</div>
+    <h2>NUEVAS ACTUALIZACIONES</h2>
+    <p class="welc-sub">Ahora tienes nuevas herramientas para consultar y visualizar tu información.</p>
+    <div class="welc-grid">
+      <div class="welc-item"><span class="welc-ico">📱</span><div><b>QR DIGITAL</b><p>Genera y utiliza tu QR de forma rápida.</p></div></div>
+      <div class="welc-item"><span class="welc-ico">🌾</span><div><b>COSECHAS</b><p>Consulta tus cosechas y visualiza tus resultados.</p></div></div>
+      <div class="welc-item"><span class="welc-ico">📊</span><div><b>RESUMEN Y PROMEDIO</b><p>Visualiza tus KG, totales y promedios de forma más clara.</p></div></div>
+      <div class="welc-item"><span class="welc-ico">🏆</span><div><b>RANKING</b><p>Consulta el ranking, busca por persona y visualiza los mejores puestos.</p></div></div>
+    </div>
+    <div class="welc-share">
+      <b>📢 COMPARTE CON TUS AMIGOS</b>
+      <p>Comparte PROAGRO WEB con tus compañeros y amigos para que también puedan utilizar estas nuevas herramientas.</p>
+      <button id="welShare" class="btn primary big2">↗️ COMPARTIR</button>
+    </div>
+    <button id="welOk" class="btn ghost big2 welc-ok">ENTENDIDO</button>
+  </div>
+</div>
+<div id="toast" class="toast hidden"></div>
+
+<script src="vendor/jsqr.min.js?v=39"></script>
 <script src="vendor/qrcode.min.js"></script>
-<script src="qrparser.js?v=38"></script>
-<script src="app.js?v=38"></script>
+<script src="qrparser.js?v=39"></script>
+<script src="app.js?v=39"></script>
 </body>
 </html>
