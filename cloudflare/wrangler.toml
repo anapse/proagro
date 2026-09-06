@@ -1,31 +1,22 @@
 # ============================================================
 # PROAGRO WEB — Worker
-# Conserva la config de despliegue actual (name/main/compatibility).
-#
-# COMUNIDAD necesita 3 cosas en Cloudflare (ver GUIA_COMUNIDAD.md):
-#   1) Base D1 llamada  proagro-comunidad   (creada en el dashboard)
-#   2) Secret:  COMMUNITY_ADMIN_TOKEN       (wrangler secret put)
-#   3) [Opcional] Bucket R2  proagro-media   para imágenes de noticias
-#
-# Cuando tengas el database_id (sácalo con: npx wrangler d1 list),
-# descomenta el bloque [d1_databases] y pega el id. Después ejecuta:
-#   npx wrangler d1 migrations apply proagro-comunidad --remote
-#   npx wrangler deploy
+# Worker real:  proagro-api  (cuenta elherreroanapse)
+# D1 real:      proagro-comunidad  (binding env.DB)
 # ============================================================
 
 name = "proagro-api"
-main = "cloudflare/worker.js"
+main = "worker.js"
 compatibility_date = "2025-01-01"
 
-# --- D1 (COMUNIDAD) — DESCOMENTAR tras poner el database_id real ---
-# [[d1_databases]]
-# binding = "DB"                 # env.DB (NO cambiar el nombre)
-# database_name = "proagro-comunidad"
-# database_id = "PEGA_AQUI_EL_ID_DE_wrangler_d1_list"
+# --- D1 (COMUNIDAD) — base REAL creada en Cloudflare ---
+[[d1_databases]]
+binding = "DB"                       # env.DB (NO cambiar el nombre)
+database_name = "proagro-comunidad"  # NO crear otra base
+database_id = "029852c7-b5da-4bb4-bf48-2c44f745c644"
 
-# --- R2 (imágenes noticias/avisos) — OPCIONAL, DESCOMENTAR tras crear el bucket ---
+# --- R2 (imágenes noticias/avisos) — OPCIONAL, solo cuando exista el bucket ---
 # [[r2_buckets]]
-# binding = "MEDIA"              # env.MEDIA
+# binding = "MEDIA"                   # env.MEDIA
 # bucket_name = "proagro-media"
 # (opcional) variable para servir imágenes por URL pública:
 # vars = { MEDIA_PUBLIC_URL = "https://pub-XXXXXXXX.r2.dev" }
