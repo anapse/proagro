@@ -322,31 +322,106 @@ function estaticoForense(name) {
     o el VPS en <span class="mono">http://IP:3792</span>. GitHub Pages queda 100% operativo para 👥 EMPLEADOS
     (QR DIGITAL, escáner, COSECHA) con las limitaciones CORS documentadas.</p></div></div>`;
 }
-let rkDatos = { rows: [], lotes: [], variedades: [], fecha: "", ts: 0 };   // caché en memoria: respuesta REAL del endpoint
+let rkDatos = { rows: [], lotes: [], variedades: [], finIso: "", label: "", ts: 0, modo: "hoy" };
 let rkTopSel = "3";   // "3" | "5" | "10" | "todas"
 
-async function cargarRanking() {
+// ---------- fetch de un día del ranking (top=5000 = todos) ----------
+async function rkFetchDia(iso) {
+  const base = workerUrl.trim().replace(/\/$/, "") + "/api/ranking";
+  const r = await fetch(base + "?top=5000&fechaIni=" + iso + "&fechaFin=" + iso, { headers: { Accept: "application/json" } });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const j = await r.json().catch(() => null);
+  if (!j || !Array.isArray(j.ranking)) throw new Error("respuesta inesperada del endpoint");
+  return j.ranking;
+}
+
+// ---------- entrada: HOY / ESTA SEMANA ----------
+async function cargarRanking(modo) {
   const panel = $("#panel-ranking"); if (!panel) return;
+  modo = modo || rkDatos.modo || "hoy";
   const hoy = hoyLocalISO();
-  if (rkDatos.ts && rkDatos.fecha === hoy && Date.now() - rkDatos.ts < 120000) { rkRenderShell(hoy); return; }
-  panel.innerHTML = `<div class="qr-sec"><h2>🏆 RANKING</h2><div class="cardbox" id="rkBox"><p>Consultando el ranking real de ${dashFmt(hoy)}…</p></div></div>`;
+  const cacheKey = modo + "_" + hoy;
+  if (rkDatos.ts && rkDatos.cacheKey === cacheKey && Date.now() - rkDatos.ts < 120000) { rkRenderShell(); return; }
+  panel.innerHTML = `<div class="qr-sec"><h2>🏆 RANKING</h2><div class="cardbox" id="rkBox"><p>Consultando ranking real…</p></div></div>`;
   try {
-    const base = workerUrl.trim().replace(/\/$/, "") + "/api/ranking";
-    const r = await fetch(base + "?top=5000&fechaIni=" + hoy + "&fechaFin=" + hoy, { headers: { Accept: "application/json" } });
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    const j = await r.json().catch(() => null);
-    if (!j || !Array.isArray(j.ranking)) throw new Error("respuesta inesperada del endpoint");
-    rkDatos = { rows: j.ranking, lotes: j.lotes || [], variedades: j.variedades || [], fecha: hoy, ts: Date.now() };
-    rkRenderShell(hoy);
+    let dias = [];         // ISO de los días cargados
+    let hallado = [];      // filas del día elegido (modo HOY)
+    let label = "";
+    if (modo === "hoy") {
+      // PROAGRO publica el ranking del día ANTERIOR: hoy → ayer → atrás (hasta 4 intentos)
+      const nom = ["hoy", "ayer", "hace 2 días", "hace 3 días"];
+      for (let k = 0; k < 4; k++) {
+        const iso = dashSum(hoy, -k);
+        const filas = await rkFetchDia(iso);
+        if (filas.length) { dias = [iso]; hallado = filas; label = k === 0 ? "HOY" : "HOY → ranking de " + nom[k] + " (" + dashFmt(iso) + ")"; break; }
+      }
+      if (!dias.length) {
+        rkDatos = { rows: [], lotes: [], variedades: [], finIso: hoy, label: "📅 HOY → PROAGRO aún no publica el ranking de hoy ni de los últimos días (publica el del día anterior). Prueba ESTA SEMANA.", ts: Date.now(), cacheKey, modo };
+        rkRenderShell();
+        return;
+      }
+    } else {
+      // ESTA SEMANA: siempre desde el LUNES (máx sábado; domingo no se muestra)
+      const semana = dashDiasSemana();
+      const conDatos = [];
+      for (const iso of semana) { const f = await rkFetchDia(iso); if (f.length) conDatos.push([iso, f]); }
+      if (!conDatos.length) {
+        // esta semana aún no tiene datos publicados → semana ANTERIOR completa (lun→sáb)
+        const prev = dashDiasPreviosSemana(semana[0]);
+        for (const iso of prev) { const f = await rkFetchDia(iso); if (f.length) conDatos.push([iso, f]); }
+        label = "🌾 Semana ANTERIOR (" + dashFmt(prev[0]) + " → " + dashFmt(prev[prev.length - 1]) + ") — esta semana aún no tiene ranking publicado";
+        dias = prev;
+      } else {
+        dias = semana;
+        const usados = conDatos.map(([iso]) => iso);
+        label = "🌾 ESTA SEMANA: lunes " + dashFmt(semana[0]) + " → " + dashFmt(semana[semana.length - 1]) + " · " + usados.length + " día(s) con datos (" + usados.map(dashFmt).join(", ") + ")";
+      }
+      // acumular por persona (kg reales de cada día publicado)
+      const agg = {};
+      conDatos.forEach(([, filas]) => filas.forEach(r2 => {
+        const nom2 = String(r2.nombre || "—");
+        const a = agg[nom2] || (agg[nom2] = { nombre: nom2, kgExportable: 0, kgDescarte: 0, kgTotal: 0, dias: 0 });
+        a.kgExportable += Number(r2.kgExportable) || 0;
+        a.kgDescarte += Number(r2.kgDescarte) || 0;
+        a.kgTotal += Number(r2.kgTotal) || 0;
+        a.dias++;
+      }));
+      const rows = Object.values(agg).sort((x, y) => y.kgTotal - x.kgTotal)
+        .map((x, i) => ({ posicion: i + 1, nombre: x.nombre, kgExportable: x.kgExportable, kgDescarte: x.kgDescarte, kgTotal: x.kgTotal, dias: x.dias }));
+      rkDatos = { rows, lotes: [], variedades: [], finIso: hoy, label, ts: Date.now(), cacheKey, modo };
+      rkRenderShell();
+      return;
+    }
+    const filas = dias.length ? hallado : [];
+    rkDatos = { rows: filas.map((r2, i) => ({ ...r2, posicion: r2.posicion != null ? r2.posicion : i + 1 })), lotes: [], variedades: [], finIso: dias[0], label, ts: Date.now(), cacheKey, modo };
+    rkRenderShell();
   } catch (e) {
     const box = $("#rkBox");
     if (box) box.innerHTML = `<p><b>❌ ERROR DE CONSULTA</b></p><p class="small muted">${esc(e && e.message || e)} — Worker: ${esc(workerUrl || "—")}</p>`;
   }
 }
 
-function rkRenderShell(hoy) {
+function rkBoxMsg(html) {
+  const box = $("#rkBox");
+  if (box) box.innerHTML = html;
+}
+
+function dashDiasPreviosSemana(lunesIso) {
+  // semana anterior: lunes(lunesIso-7) → sábado(lunesIso-1)
+  const lun = dashSum(lunesIso, -7);
+  const dias = [];
+  for (let d = lun, i = 0; i < 6; i++, d = dashSum(d, 1)) dias.push(d);
+  return dias;
+}
+
+function rkRenderShell() {
   const panel = $("#panel-ranking"); if (!panel) return;
-  panel.innerHTML = `<div class="qr-sec"><h2>🏆 RANKING <span class="small muted">· ${dashFmt(hoy)} · ${rkDatos.rows.length} cosechador(es)</span></h2>
+  panel.innerHTML = `<div class="qr-sec"><h2>🏆 RANKING</h2>
+    <div class="rank-per">
+      <button id="rkPerHoy" class="btn ${rkDatos.modo !== "semana" ? "primary" : "ghost"}">📅 HOY</button>
+      <button id="rkPerSem" class="btn ${rkDatos.modo === "semana" ? "primary" : "ghost"}">🌾 ESTA SEMANA</button>
+    </div>
+    <p class="small muted">${esc(rkDatos.label)} · ${rkDatos.rows.length} cosechador(es). PROAGRO publica el ranking del día anterior; la semana siempre se cuenta desde el lunes.</p>
     <div class="subtabs">
       <button id="rkTabTop" class="active">🏆 Ranking</button>
       <button id="rkTabBus">🔎 Buscar por nombre</button>
@@ -354,6 +429,9 @@ function rkRenderShell(hoy) {
     <div id="rkTopView"></div>
     <div id="rkBusView" class="hidden"></div>
     <p class="small muted">Datos reales devueltos por ObtenerRankingVista (solo lectura, vía Worker).</p></div>`;
+  const pH = $("#rkPerHoy"), pS = $("#rkPerSem");
+  pH.onclick = () => { cargarRanking("hoy"); };
+  pS.onclick = () => { cargarRanking("semana"); };
   const t1 = $("#rkTabTop"), t2 = $("#rkTabBus");
   t1.onclick = () => { t1.classList.add("active"); t2.classList.remove("active"); $("#rkTopView").classList.remove("hidden"); $("#rkBusView").classList.add("hidden"); };
   t2.onclick = () => { t2.classList.add("active"); t1.classList.remove("active"); $("#rkBusView").classList.remove("hidden"); $("#rkTopView").classList.add("hidden"); rkRenderBus(); };
@@ -363,7 +441,8 @@ function rkRenderShell(hoy) {
 function rkN(v) { const x = Number(v); return isFinite(x) ? x.toLocaleString("es", { maximumFractionDigits: 1 }) : "—"; }
 function rkNrm(s) { return (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
 function rkFilaHTML(r2, i) {
-  return `<tr class="rk-fila" data-i="${i}"><td class="rk-pos">${r2.posicion != null ? r2.posicion : i + 1}</td><td>${esc(r2.nombre || "—")}</td>` +
+  const dias = rkDatos.modo === "semana" && r2.dias ? ` <span class="small muted">(${r2.dias}d)</span>` : "";
+  return `<tr class="rk-fila" data-i="${i}"><td class="rk-pos">${r2.posicion != null ? r2.posicion : i + 1}</td><td>${esc(r2.nombre || "—")}${dias}</td>` +
     `<td class="num">${rkN(r2.kgExportable)}</td><td class="num">${rkN(r2.kgDescarte)}</td><td class="num"><b>${rkN(r2.kgTotal)}</b></td></tr>`;
 }
 function rkBindFilas(contSel, fnDet) {
@@ -381,10 +460,10 @@ function rkRenderTop() {
   document.querySelectorAll(".rank-chips [data-top]").forEach(b => b.onclick = () => { rkTopSel = b.dataset.top; rkRenderTop(); });
   const top = filas.slice(0, nSel);
   $("#rkTopTable").innerHTML = top.length
-    ? `<table class="tbl rank-tbl"><thead><tr><th>#</th><th>Nombre</th><th class="num">Exportable KG</th><th class="num">Descarte</th><th class="num">Total KG</th></tr></thead><tbody>` +
+    ? `<table class="tbl rank-tbl"><thead><tr><th>#</th><th>${rkDatos.modo === "semana" ? "Nombre (días)" : "Nombre"}</th><th class="num">Exportable KG</th><th class="num">Descarte</th><th class="num">${rkDatos.modo === "semana" ? "Total acumulado KG" : "Total KG"}</th></tr></thead><tbody>` +
       top.map(rkFilaHTML).join("") + `</tbody></table>
       <p class="small muted">Toca una fila para ver todo el detalle de esa persona.</p>`
-    : `<p>⚠️ NO HAY DATOS de ranking para ${dashFmt(rkDatos.fecha)}.</p>`;
+    : `<p>⚠️ NO HAY DATOS de ranking para este período.</p>`;
   rkBindFilas("#rkTopTable", i => rkDetalle(i, "#rkDetalleTop"));
 }
 
@@ -418,18 +497,19 @@ function rkDetalle(i, contSel) {
   const cont = document.querySelector(contSel); if (!cont) return;
   const tot = Number(r2.kgTotal); const suma = rkDatos.rows.reduce((a, x) => a + (Number(x.kgTotal) || 0), 0);
   const pct = isFinite(tot) && suma > 0 ? ((tot / suma) * 100).toLocaleString("es", { maximumFractionDigits: 1 }) + " %" : "—";
+  const extra = rkDatos.modo === "semana" && r2.dias ? `<div class="card dash-total"><div class="l">🗓️ Días con datos</div><div class="n">${r2.dias}</div></div>` : "";
   cont.innerHTML = `<div class="cardbox rk-det">
     <h3>👤 ${esc(r2.nombre || "—")}</h3>
-    <p class="small muted">Puesto <b>#${r2.posicion != null ? r2.posicion : i + 1}</b> del ranking del ${dashFmt(rkDatos.fecha)} — ${rkDatos.rows.length} cosechadores</p>
+    <p class="small muted">${esc(rkDatos.label)} · Puesto <b>#${r2.posicion != null ? r2.posicion : i + 1}</b> · ${rkDatos.rows.length} cosechadores</p>
     <div class="dash-grid"><div class="dash-chart-card rk-det-kgs">
       <div class="dash-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
         <div class="card dash-total"><div class="l">🟢 Exportable</div><div class="n">${rkN(r2.kgExportable)} <small>KG</small></div></div>
         <div class="card dash-total"><div class="l">🔴 Descarte</div><div class="n">${rkN(r2.kgDescarte)} <small>KG</small></div></div>
-        <div class="card dash-total"><div class="l">🌾 Total del día</div><div class="n"><b>${rkN(r2.kgTotal)} <small>KG</small></b></div></div>
-      </div></div>
-      <div class="dash-side"><div class="card dash-var"><div class="l">📊 % del ranking</div><div class="n">${pct}</div><div class="s">kgTotal de ${esc(r2.nombre || "esta persona")} vs suma del día</div></div></div>
+        <div class="card dash-total"><div class="l">🌾 ${rkDatos.modo === "semana" ? "Total acumulado" : "Total del día"}</div><div class="n"><b>${rkN(r2.kgTotal)} <small>KG</small></b></div></div>
+      </div>${extra ? extra.replace('class="card dash-total"', 'class="card dash-total" style="margin-top:10px"') : ""}</div>
+      <div class="dash-side"><div class="card dash-var"><div class="l">📊 % del ranking</div><div class="n">${pct}</div><div class="s">kgTotal vs suma del período</div></div></div>
     </div>
-    <p class="small muted">Campos reales del endpoint: posicion · nombre · kgExportable · kgDescarte · kgTotal (solo lectura).</p>
+    <p class="small muted">Campos reales del endpoint: posicion · nombre · kgExportable · kgDescarte · kgTotal${rkDatos.modo === "semana" ? " (acumulado por persona de los días publicados)" : ""} (solo lectura).</p>
   </div>`;
   cont.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }

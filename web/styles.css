@@ -676,3 +676,7 @@ body[data-static="1"] header.top{position:relative}
 .rk-pos{font-weight:800;color:var(--accent)}
 .rk-det{margin-top:12px;border:1px solid var(--border);box-shadow:0 6px 18px rgba(0,0,0,.06)}
 .rk-busca input{max-width:520px}
+
+/* ============ RANKING: botones de período HOY / ESTA SEMANA ============ */
+.rank-per{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:460px;margin:4px 0 10px}
+.rank-per .btn{min-height:52px;font-size:16px;border-radius:14px}
