@@ -8,7 +8,7 @@
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);
-  font:14px/1.5 "Segoe UI",Arial,sans-serif}
+  font:13px/1.45 "Segoe UI",Arial,sans-serif}
 .mono{font-family:Consolas,"Cascadia Mono",monospace}
 .muted{color:var(--muted)} .small{font-size:11.5px}
 .hidden{display:none!important}
@@ -25,10 +25,10 @@ header.top{display:flex;justify-content:space-between;align-items:center;
 .sub{color:var(--muted);font-size:11px}
 .top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 select.inp,.inp{background:var(--panel2);color:var(--text);border:1px solid var(--border);
-  border-radius:6px;padding:12px 16px;font-size:14px;min-height:44px;box-sizing:border-box}
+  border-radius:6px;padding:6px 8px;font-size:12.5px}
 .btn{border-radius:7px;border:1px solid var(--border);background:var(--panel2);color:var(--text);
-  padding:12px 16px;cursor:pointer;font-weight:600;font-size:14px;min-width:100px;
-  transition:.15s;white-space:normal;word-wrap:break-word;min-height:48px;display:flex;align-items:center;justify-content:center}
+  padding:8px 14px;cursor:pointer;font-weight:600;font-size:12.5px;min-width:120px;
+  transition:.15s;white-space:nowrap}
 .btn:hover{filter:brightness(1.18)}
 .btn.primary{background:linear-gradient(135deg,#1f9e5b,#2fbf71);border-color:#2fbf71;color:#05230f}
 .btn.ghost{background:transparent}
@@ -49,7 +49,7 @@ select.inp,.inp{background:var(--panel2);color:var(--text);border:1px solid var(
 .tabs{display:flex;gap:2px;padding:8px 12px 0;overflow-x:auto;border-bottom:1px solid var(--border);
   background:var(--bg)}
 .tabs button{background:transparent;border:1px solid transparent;border-bottom:none;color:var(--muted);
-  padding:12px 16px;cursor:pointer;font-size:14px;border-radius:7px 7px 0 0;white-space:normal;word-wrap:break-word;min-height:44px;display:flex;align-items:center;justify-content:center}
+  padding:8px 13px;cursor:pointer;font-size:12.5px;border-radius:7px 7px 0 0;white-space:nowrap}
 .tabs button:hover{color:var(--text)}
 .tabs button.active{background:var(--panel);border-color:var(--border);color:var(--accent);
   font-weight:700;box-shadow:inset 0 2px 0 var(--accent)}
@@ -78,15 +78,11 @@ main{padding:14px}
 
 .row{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}
 .toolbar{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
-.search-input{width:100%;min-width:120px}
-@media(max-width:400px){
-  .search-input{min-width:80px}
-}
 .note{background:#0e1a13;border:1px solid #1d3a28;border-left:3px solid var(--accent);
   border-radius:6px;padding:8px 12px;margin-bottom:10px;color:#bcd8c6;font-size:12px}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
-.chip{border-radius:20px;padding:8px 14px;font-size:14px;background:var(--panel2);
-  border:1px solid var(--border);color:var(--muted);min-height:36px;display:flex;align-items:center;justify-content:center}
+.chip{border-radius:20px;padding:3px 10px;font-size:11px;background:var(--panel2);
+  border:1px solid var(--border);color:var(--muted)}
 .chip b{color:var(--text)}
 
 /* tablas */
@@ -146,7 +142,7 @@ h2.tabtitle{font-size:14px;margin:4px 0 10px}
 
 /* ============ QR → KG ============ */
 .btn.big{padding:14px 18px;font-size:15px;min-width:150px}
-.btn.small{min-width:auto;padding:10px 14px;font-size:13px;min-height:44px;display:flex;align-items:center;justify-content:center}
+.btn.small{min-width:auto;padding:5px 10px;font-size:11.5px}
 .qr-actions button{flex:1;min-width:140px}
 .scannerbox{position:relative;border:2px solid var(--accent);border-radius:12px;
   overflow:hidden;margin:10px 0;background:#000}
@@ -207,11 +203,8 @@ h2.tabtitle{font-size:14px;margin:4px 0 10px}
 .scanhead{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;
   background:#0a0e14;color:#fff;font-size:17px}
 .scanvideo{position:relative;background:#000;min-height:240px}
-@media(max-width:400px){
-  .scanvideo{min-height:180px}
-}
 .scanvideo video{width:100%;max-height:62vh;display:block;object-fit:contain}
-.scanstatus{min-height:36px;padding:6px 12px;font-size:15px;color:#ffcf6e;background:#10151d}
+.scanstatus{min-height:26px;padding:10px 16px;font-size:15px;color:#ffcf6e;background:#10151d}
 .scanstatus.err{color:#ff7a7a}
 .scanbtns{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 14px}
 .scanbtns .btn{min-height:60px;font-size:17px}
@@ -330,7 +323,7 @@ body[data-area="empleados"] .auditbar,body[data-area="empleados"] #quickStats{di
 .areas button{border-radius:999px;padding:11px 26px}
 .areas button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .tabs{gap:4px;padding:6px 12px 10px;flex-wrap:wrap}
-.tabs button{border-radius:999px;padding:12px 16px;font-size:14px}
+.tabs button{border-radius:999px;padding:8px 14px;font-size:13px}
 .tabs button.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:none}
 
 /* Estado de resultados con bolitas/emojis grandes (COSECHA) */
@@ -349,7 +342,7 @@ body[data-area="empleados"] .auditbar,body[data-area="empleados"] #quickStats{di
   box-shadow:var(--shadow);padding:20px;margin:14px 0}
 .qr-head h2,#panel-qrdigital h2{color:var(--accent)}
 #qrkg .btn.big2,#panel-qrdigital .btn.big2{min-height:62px;font-size:18px;border-radius:12px}
-.inp{height:48px;font-size:16px;border-radius:10px;border:1px solid var(--border);background:var(--panel)}
+.inp{height:46px;font-size:16px;border-radius:10px;border:1px solid var(--border);background:var(--panel)}
 
 /* texto de marca */
 .brand .logo{background:var(--accent);border-radius:10px}
@@ -406,9 +399,6 @@ body[data-area="empleados"] .auditbar,body[data-area="empleados"] #quickStats{di
 .cosecha-quien{padding:16px 18px}
 .row-who{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px}
 .who-inp{flex:1;min-width:180px;max-width:300px;height:50px;font-size:19px}
-@media(max-width:400px){
-  .who-inp{min-width:120px}
-}
 .row-who .btn{min-height:50px;font-size:15px;padding:0 18px;border-radius:12px}
 .cosecha-periodos{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 4px;width:100%}
 .cosecha-periodos .btn{min-height:60px;font-size:18px;border-radius:14px;width:100%}
@@ -500,8 +490,8 @@ body[data-area="empleados"] .top .areas{margin-left:auto}
   .top .brand h1{font-size:15px}
   .top .areas button{padding:8px 10px;font-size:13px}
   .top .top-actions{gap:4px}
-  .btn{font-size:13px;padding:10px 14px;min-width:auto}
-  .btn.small{font-size:12px;padding:8px 12px;min-height:44px}
+  .btn{font-size:12px;padding:6px 10px;min-width:auto}
+  .btn.small{font-size:11px;padding:4px 8px}
   .forense-tools{gap:4px}
 }
 
@@ -527,7 +517,7 @@ main .panel{background:transparent}
 .hd,.hrow{display:grid;grid-template-columns:92px 84px minmax(120px,1fr) 96px 130px;gap:10px;align-items:center}
 .hd{padding:6px 8px;font-size:11.5px;font-weight:800;letter-spacing:.4px;color:var(--muted);
   border-bottom:1px solid var(--border);text-transform:uppercase}
-.hrow{padding:12px 8px;border-bottom:1px solid var(--border);border-radius:8px}
+.hrow{padding:7px 8px;border-bottom:1px solid var(--border);border-radius:8px}
 .hrow:last-child{border-bottom:none}
 .hrow.ok{background:color-mix(in srgb,#2e9e5b 6%,var(--panel))}
 .hrow.est{background:color-mix(in srgb,#e0a63c 6%,var(--panel))}
@@ -553,13 +543,13 @@ main .panel{background:transparent}
 [data-theme="dark"] .hd-v.down{color:#ff8585}
 @media(max-width:760px){
   .hd,.hrow{grid-template-columns:76px 64px minmax(80px,1fr) 84px 108px;gap:6px}
-  .hrow{font-size:12.5px;padding:10px 6px}
+  .hrow{font-size:12.5px}
   .hd{font-size:10px}
-  .fchip{padding:4px 8px;font-size:12px}
+  .fchip{padding:2px 7px;font-size:11px}
 }
 @media(max-width:560px){
   .hd{display:none}
-  .hrow{grid-template-columns:62px 56px 1fr;grid-auto-rows:auto;row-gap:2px;padding:12px 6px}
+  .hrow{grid-template-columns:62px 56px 1fr;grid-auto-rows:auto;row-gap:2px;padding:8px}
   .hrow .hd-b{grid-column:1/-1;grid-row:2}
   .hrow .hd-v{grid-column:1/2;grid-row:3}
   .hrow .hd-e{grid-column:2/4;grid-row:3;text-align:right}
@@ -738,57 +728,6 @@ body[data-static="1"] header.top{position:relative}
   .welc-card h2{font-size:19px}
 }
 @media(min-width:1200px){.welc-card{max-width:700px}}
-
-/* ============================================================
-   CELEBRACIÓN DEL RANKING — Modal de premiación
-   ============================================================ */
-.celeb-ov{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;padding:16px}
-.celeb-ov.hidden{display:none}
-.celeb-backdrop{position:absolute;inset:0;background:rgba(6,12,8,.75);backdrop-filter:blur(6px);opacity:0;transition:opacity .35s ease}
-.celeb-ov.show .celeb-backdrop{opacity:1}
-.celeb-card{background:var(--panel);border:1px solid var(--border);border-radius:24px;max-width:520px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 32px 80px rgba(0,0,0,.4),0 0 0 1px rgba(255,215,0,.15);position:relative;transform:scale(.5) translateY(40px);opacity:0;transition:transform .45s cubic-bezier(.22,1,.36,1),opacity .45s ease}
-.celeb-ov.show .celeb-card{transform:scale(1) translateY(0);opacity:1}
-.celeb-close{position:absolute;top:10px;right:12px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);width:36px;height:36px;border-radius:50%;font-size:18px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;transition:all .2s ease}
-.celeb-close:hover{background:var(--danger);border-color:var(--danger);color:#fff;transform:rotate(90deg)}
-.celeb-content{padding:28px 24px 20px;text-align:center}
-.celeb-trophy-wrap{position:relative;width:180px;height:220px;margin:0 auto 16px;filter:drop-shadow(0 12px 32px rgba(255,215,0,.35))}
-.celeb-trophy{width:100%;height:100%;transform-origin:center bottom}
-.trophy-sparkles circle{transform-origin:center}
-.celeb-title{margin:0 0 6px;font-size:clamp(20px,5vw,28px);font-weight:900;color:var(--accent);letter-spacing:.5px;line-height:1.2}
-.celeb-subtitle{margin:0 0 14px;font-size:clamp(13px,3vw,16px);color:var(--muted);font-weight:600}
-.celeb-winners{margin:0 0 12px}
-.celeb-winner{font-size:clamp(18px,4vw,24px);font-weight:800;color:var(--text);margin:4px 0;line-height:1.3}
-.celeb-winner.tie{color:var(--accent2)}
-.celeb-metrics{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin:0 0 16px}
-.celeb-metric{display:flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--border);border-radius:999px;padding:8px 14px;font-size:clamp(12px,2.5vw,14px);font-weight:700;color:var(--text)}
-.celeb-metric i{font-style:normal;font-size:1.1em}
-.celeb-rank-badge{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,rgba(255,215,0,.18),rgba(255,215,0,.08));border:2px solid var(--accent);border-radius:999px;padding:10px 20px;font-size:clamp(14px,3vw,18px);font-weight:900;color:var(--accent);margin-top:8px}
-.celeb-btn-close{margin-top:14px;min-height:52px;font-size:16px;border-radius:14px}
-@media(max-width:480px){
-  .celeb-card{margin:8px;border-radius:20px}
-  .celeb-trophy-wrap{width:150px;height:190px}
-  .celeb-content{padding:22px 16px 16px}
-  .celeb-metric{padding:6px 12px;font-size:12px}
-}
-@media(prefers-reduced-motion:reduce){
-  .celeb-card{transition:none;transform:none;opacity:1}
-  .celeb-backdrop{transition:none;opacity:.75}
-  .trophy-sparkles circle{animation:none!important;opacity:0}
-  .celeb-trophy *{animation:none!important;transition:none!important}
-  .celeb-trophy polygon{animation:none!important}
-}
-
-/* Confeti */
-.celeb-confetti{position:fixed;inset:0;pointer-events:none;z-index:299;overflow:hidden}
-.celeb-confetti.hidden{display:none}
-.celeb-confetti-piece{position:absolute;top:-20px;width:10px;height:10px;opacity:0;animation:confettiFall 2.5s cubic-bezier(.25,.46,.45,.94) forwards}
-@keyframes confettiFall{
-  0%{opacity:1;transform:translateY(0) rotate(0deg)}
-  100%{opacity:0;transform:translateY(110vh) rotate(720deg)}
-}
-@media(prefers-reduced-motion:reduce){
-  .celeb-confetti-piece{animation:none;opacity:0;display:none}
-}
 
 /* Bienvenida: sin botón de cerrar; se cierra con clic en cualquier lado o a los 5 s */
 .welc-x,.welc-ok{display:none}

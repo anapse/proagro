@@ -719,5 +719,10 @@
     }
   };
 
+  // Exponer caché de supervisores para el sistema de celebración
+  CM.getSupervisoresCache = function () {
+    return supCache;
+  };
+
   window.comunidad = CM;
 })();

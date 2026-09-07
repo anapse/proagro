@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WEB — Empleados y Forense</title>
 <link rel="icon" type="image/png" href="assets/favicon.png">
-<link rel="stylesheet" href="styles.css?v=43">
+<link rel="stylesheet" href="styles.css?v=44">
 </head>
 <body>
 <header class="top">
@@ -215,7 +215,7 @@
     </div>
     <div id="invStats" class="cards"></div>
     <div class="toolbar">
-      <input id="invBuscar" class="inp" placeholder="🔎 Buscar endpoint…" style="flex:1;min-width:200px">
+      <input id="invBuscar" class="inp search-input" placeholder="🔎 Buscar endpoint…" style="flex:1;min-width:200px">
       <span id="invCount" class="muted small"></span>
     </div>
     <div class="chips inv-filters" id="invFiltros"></div>
@@ -375,6 +375,129 @@ campos: hora/variedad/kgExportable/kgDescarte.</div>
   </div>
 </div>
 <div id="toast" class="toast hidden"></div>
+
+<!-- ============ MODAL DE CELEBRACIÓN DEL RANKING ============ -->
+<div id="celebracionOv" class="celeb-ov hidden" role="dialog" aria-modal="true" aria-labelledby="celebTitle">
+  <div class="celeb-backdrop" tabindex="-1"></div>
+  <div class="celeb-card" role="document">
+    <button id="celebClose" class="celeb-close" aria-label="Cerrar celebración">✕</button>
+    
+    <div class="celeb-content">
+      <!-- Trofeo SVG animado -->
+      <div class="celeb-trophy-wrap">
+        <svg class="celeb-trophy" viewBox="0 0 120 160" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <!-- Brillo de fondo -->
+          <defs>
+            <radialGradient id="trophyGlow" cx="50%" cy="30%" r="70%">
+              <stop offset="0%" stop-color="#ffd700" stop-opacity="0.4"/>
+              <stop offset="100%" stop-color="#ffd700" stop-opacity="0"/>
+            </radialGradient>
+            <linearGradient id="trophyGold" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#ffdf00"/>
+              <stop offset="30%" stop-color="#ffd700"/>
+              <stop offset="60%" stop-color="#e6c200"/>
+              <stop offset="100%" stop-color="#b8860b"/>
+            </linearGradient>
+            <linearGradient id="trophyBase" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#4a4a4a"/>
+              <stop offset="50%" stop-color="#2d2d2d"/>
+              <stop offset="100%" stop-color="#1a1a1a"/>
+            </linearGradient>
+            <filter id="trophyShadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#ffd700" flood-opacity="0.3"/>
+            </filter>
+            <filter id="innerGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3" result="blur"/>
+              <feMerge>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+          </defs>
+          
+          <!-- Partículas de brillo alrededor -->
+          <g class="trophy-sparkles" aria-hidden="true">
+            <circle cx="15" cy="30" r="2" fill="#fff" opacity="0">
+              <animate attributeName="opacity" values="0;1;0" dur="1.5s" repeatCount="indefinite" begin="0.2s"/>
+              <animate attributeName="r" values="1;3;1" dur="1.5s" repeatCount="indefinite" begin="0.2s"/>
+            </circle>
+            <circle cx="105" cy="35" r="1.5" fill="#fff" opacity="0">
+              <animate attributeName="opacity" values="0;1;0" dur="1.8s" repeatCount="indefinite" begin="0.5s"/>
+              <animate attributeName="r" values="1;2.5;1" dur="1.8s" repeatCount="indefinite" begin="0.5s"/>
+            </circle>
+            <circle cx="20" cy="120" r="2" fill="#ffdf00" opacity="0">
+              <animate attributeName="opacity" values="0;1;0" dur="2s" repeatCount="indefinite" begin="0.8s"/>
+              <animate attributeName="r" values="1;3;1" dur="2s" repeatCount="indefinite" begin="0.8s"/>
+            </circle>
+            <circle cx="100" cy="115" r="1.5" fill="#ffdf00" opacity="0">
+              <animate attributeName="opacity" values="0;1;0" dur="2.2s" repeatCount="indefinite" begin="1.1s"/>
+              <animate attributeName="r" values="1;2.5;1" dur="2.2s" repeatCount="indefinite" begin="1.1s"/>
+            </circle>
+            <circle cx="60" cy="10" r="1" fill="#fff" opacity="0">
+              <animate attributeName="opacity" values="0;1;0" dur="1.2s" repeatCount="indefinite" begin="0.3s"/>
+              <animate attributeName="cy" values="10;5;10" dur="1.2s" repeatCount="indefinite" begin="0.3s"/>
+            </circle>
+            <circle cx="55" cy="145" r="1.5" fill="#ffdf00" opacity="0">
+              <animate attributeName="opacity" values="0;1;0" dur="1.6s" repeatCount="indefinite" begin="0.6s"/>
+              <animate attributeName="cy" values="145;150;145" dur="1.6s" repeatCount="indefinite" begin="0.6s"/>
+            </circle>
+          </g>
+          
+          <!-- Glow base -->
+          <ellipse cx="60" cy="148" rx="35" ry="6" fill="url(#trophyGlow)" filter="url(#trophyShadow)"/>
+          
+          <!-- Base del trofeo (3 niveles) -->
+          <rect x="30" y="140" width="60" height="12" rx="3" fill="url(#trophyBase)"/>
+          <rect x="22" y="132" width="76" height="10" rx="3" fill="url(#trophyBase)"/>
+          <rect x="15" y="125" width="90" height="9" rx="2" fill="url(#trophyBase)"/>
+          
+          <!-- Tallo central -->
+          <path d="M55 125 L58 95 L62 95 L65 125 Z" fill="url(#trophyGold)" filter="url(#innerGlow)"/>
+          <circle cx="60" cy="95" r="8" fill="url(#trophyGold)" filter="url(#innerGlow)"/>
+          
+          <!-- Copa principal -->
+          <path d="M35 95 Q25 60 35 40 Q45 25 60 25 Q75 25 85 40 Q95 60 85 95 Z" 
+                fill="url(#trophyGold)" filter="url(#innerGlow)" stroke="#e6c200" stroke-width="1"/>
+          
+          <!-- Brillo interior de la copa -->
+          <path d="M42 90 Q45 65 52 50 Q58 40 68 40 Q78 50 80 65 Q85 90 80 90 Q78 85 70 85 Q60 75 50 85 Q42 85 42 90 Z" 
+                fill="#fff" opacity="0.15"/>
+          
+          <!-- Asas -->
+          <path d="M35 75 Q18 65 15 50 Q12 45 18 42 Q30 38 38 50 Q35 60 35 75" 
+                fill="none" stroke="url(#trophyGold)" stroke-width="5" stroke-linecap="round" filter="url(#innerGlow)"/>
+          <path d="M85 75 Q102 65 105 50 Q108 45 102 42 Q90 38 82 50 Q85 60 85 75" 
+                fill="none" stroke="url(#trophyGold)" stroke-width="5" stroke-linecap="round" filter="url(#innerGlow)"/>
+          
+          <!-- Número 1 en el centro -->
+          <text x="60" y="72" text-anchor="middle" font-family="Arial, sans-serif" 
+                font-size="36" font-weight="900" fill="#1a1a1a" opacity="0.9">1</text>
+          <text x="60" y="72" text-anchor="middle" font-family="Arial, sans-serif" 
+                font-size="36" font-weight="900" fill="#ffdf00" opacity="0.3">
+            <animate attributeName="opacity" values="0.3;0.6;0.3" dur="2s" repeatCount="indefinite"/>
+          </text>
+          
+          <!-- Estrella en la punta -->
+          <polygon points="60,20 62,28 70,28 64,33 66,41 60,36 54,41 56,33 50,28 58,28" 
+                   fill="#ffdf00" stroke="#e6c200" stroke-width="0.5">
+            <animateTransform attributeName="transform" type="rotate" from="0 60 24" to="360 60 24" dur="8s" repeatCount="indefinite"/>
+          </polygon>
+        </svg>
+      </div>
+      
+      <!-- Contenido textual -->
+      <div class="celeb-text">
+        <h2 id="celebTitle" class="celeb-title"></h2>
+        <p class="celeb-subtitle"></p>
+        <div class="celeb-winners" id="celebWinners"></div>
+        <div class="celeb-metrics" id="celebMetrics"></div>
+        <div class="celeb-rank-badge" id="celebRankBadge"></div>
+      </div>
+      
+      <button id="celebBtnClose" class="btn primary big2">ENTENDIDO</button>
+    </div>
+  </div>
+</div>
 
 <script src="vendor/jsqr.min.js?v=40"></script>
 <script src="vendor/qrcode.min.js"></script>

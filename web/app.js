@@ -2307,3 +2307,413 @@ function iniciarBienvenida() {
   if (wOv) wOv.addEventListener("click", () => cerrarBienvenida());  // clic en cualquier lado cierra
   iniciarBienvenida();
 })();
+
+/* ============================================================
+   CELEBRACIÓN DEL RANKING — Sistema de premiación visual
+   Conectado a datos reales de PROAGRO (Cosechadores) y D1 (Supervisores)
+   ============================================================ */
+(function initCelebracion() {
+  "use strict";
+
+  // Estado para evitar apertura repetida
+  let celebShown = {
+    ranking_hoy: false,
+    ranking_semana: false,
+    supervisores: false
+  };
+
+  // Elementos del DOM
+  const celebOv = $("#celebracionOv");
+  const celebClose = $("#celebClose");
+  const celebBtnClose = $("#celebBtnClose");
+  const celebTitle = $("#celebTitle");
+  const celebSubtitle = $(".celeb-subtitle");
+  const celebWinners = $("#celebWinners");
+  const celebMetrics = $("#celebMetrics");
+  const celebRankBadge = $("#celebRankBadge");
+  const celebBackdrop = celebOv ? celebOv.querySelector(".celeb-backdrop") : null;
+
+  // Colores del confeti (tema PROAGRO)
+  const CONFETTI_COLORS = [
+    "#2e7d32", "#2fbf71", "#4ade80", "#ffdf00", "#ffd700", "#ffb020",
+    "#38b6ff", "#7dd3fc", "#fff", "#b8860b"
+  ];
+
+  // ============================================================
+  // UTILIDADES
+  // ============================================================
+  function fmtKg(v) {
+    const n = Number(v);
+    return isFinite(n) ? n.toLocaleString("es", { maximumFractionDigits: 1 }) + " KG" : "—";
+  }
+
+  function fmtNum(v) {
+    const n = Number(v);
+    return isFinite(n) ? n.toLocaleString("es") : "—";
+  }
+
+  // ============================================================
+  // CONFETI
+  // ============================================================
+  function crearConfeti() {
+    const container = document.createElement("div");
+    container.className = "celeb-confetti";
+    document.body.appendChild(container);
+
+    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReduced) {
+      setTimeout(() => container.remove(), 100);
+      return;
+    }
+
+    const pieceCount = 45;
+    for (let i = 0; i < pieceCount; i++) {
+      const piece = document.createElement("div");
+      piece.className = "celeb-confetti-piece";
+      
+      // Forma aleatoria: cuadrado, círculo, triángulo
+      const shape = Math.random();
+      if (shape < 0.4) {
+        piece.style.borderRadius = "2px";
+      } else if (shape < 0.7) {
+        piece.style.borderRadius = "50%";
+      } else {
+        piece.style.clipPath = "polygon(50% 0%, 0% 100%, 100% 100%)";
+        piece.style.borderRadius = "0";
+      }
+      
+      piece.style.background = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+      piece.style.left = (10 + Math.random() * 80) + "vw";
+      piece.style.width = piece.style.height = (6 + Math.random() * 10) + "px";
+      piece.style.opacity = "0";
+      piece.style.animationDelay = (Math.random() * 0.6) + "s";
+      piece.style.animationDuration = (2.2 + Math.random() * 1.2) + "s";
+      piece.style.transform = `rotate(${Math.random() * 360}deg)`;
+      
+      container.appendChild(piece);
+    }
+
+    // Limpiar después de la animación
+    setTimeout(() => {
+      if (container.parentNode) container.parentNode.removeChild(container);
+    }, 4500);
+  }
+
+  // ============================================================
+  // ANIMACIÓN DE ENTRADA DE LA TARJETA
+  // ============================================================
+  function abrirCelebracion() {
+    if (!celebOv) return;
+    
+    // Reset de animaciones
+    celebOv.classList.remove("show");
+    // Forzar reflow
+    void celebOv.offsetWidth;
+    
+    celebOv.classList.remove("hidden");
+    celebOv.classList.add("show");
+    
+    // Bloquear scroll del body
+    document.body.style.overflow = "hidden";
+    
+    // Disparar confeti después de la animación principal
+    setTimeout(crearConfeti, 700);
+  }
+
+  function cerrarCelebracion() {
+    if (!celebOv) return;
+    
+    celebOv.classList.remove("show");
+    setTimeout(() => {
+      celebOv.classList.add("hidden");
+      document.body.style.overflow = "";
+    }, 350);
+  }
+
+  // Event listeners
+  if (celebClose) celebClose.onclick = (e) => { e.stopPropagation(); cerrarCelebracion(); };
+  if (celebBtnClose) celebBtnClose.onclick = cerrarCelebracion;
+  if (celebBackdrop) celebBackdrop.onclick = cerrarCelebracion;
+  
+  // Cerrar con ESC
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && celebOv && !celebOv.classList.contains("hidden")) {
+      cerrarCelebracion();
+    }
+  });
+
+  // ============================================================
+  // LÓGICA DE GANADORES — COSECHADORES
+  // ============================================================
+  function getCosechadorGanador(datos, modo) {
+    // datos = rkDatos.rows ya ordenado por kgTotal descendente
+    if (!datos || !datos.length) return null;
+    
+    const ganador = datos[0];
+    return {
+      nombre: ganador.nombre || "—",
+      kgTotal: Number(ganador.kgTotal) || 0,
+      kgExportable: Number(ganador.kgExportable) || 0,
+      kgDescarte: Number(ganador.kgDescarte) || 0,
+      posicion: ganador.posicion || 1,
+      dias: ganador.dias || 0
+    };
+  }
+
+  // ============================================================
+  // LÓGICA DE GANADORES — SUPERVISORES (likes → comentarios)
+  // ============================================================
+  function getSupervisoresGanadores(supervisores) {
+    if (!supervisores || !supervisores.length) return { ganadores: [], empate: false, tipo: "vacio" };
+    
+    // Ordenar por likes DESC, luego comentarios DESC
+    const ordenados = [...supervisores].sort((a, b) => {
+      const likesDiff = (b.likes || 0) - (a.likes || 0);
+      if (likesDiff !== 0) return likesDiff;
+      return (b.comentarios || 0) - (a.comentarios || 0);
+    });
+    
+    const maxLikes = ordenados[0].likes || 0;
+    const conMaxLikes = ordenados.filter(s => (s.likes || 0) === maxLikes);
+    
+    if (conMaxLikes.length === 1) {
+      return { ganadores: [conMaxLikes[0]], empate: false, tipo: "unico" };
+    }
+    
+    // Hay empate en likes, desempatar por comentarios
+    const maxComentarios = Math.max(...conMaxLikes.map(s => s.comentarios || 0));
+    const ganadores = conMaxLikes.filter(s => (s.comentarios || 0) === maxComentarios);
+    
+    if (ganadores.length === 1) {
+      return { ganadores, empate: false, tipo: "unico" };
+    }
+    
+    // Empate real: mismos likes Y mismos comentarios
+    let tipoEmpate = "multiple";
+    if (ganadores.length === 2) tipoEmpate = "doble";
+    else if (ganadores.length === 3) tipoEmpate = "triple";
+    
+    return { 
+      ganadores, 
+      empate: true, 
+      tipo: tipoEmpate,
+      likes: maxLikes,
+      comentarios: maxComentarios
+    };
+  }
+
+  // ============================================================
+  // RENDERIZADO DEL MODAL
+  // ============================================================
+  function renderCelebracionCosechador(ganador, modo) {
+    const esSemana = modo === "semana";
+    const titulo = esSemana 
+      ? "¡EL MEJOR COSECHADOR DE LA SEMANA!" 
+      : "¡EL MEJOR COSECHADOR DEL DÍA!";
+    
+    celebTitle.textContent = "🏆 " + titulo;
+    celebSubtitle.textContent = `Periodo: ${esSemana ? "Semana (Lun→Sáb)" : "Día"} · Datos reales de PROAGRO`;
+    
+    celebWinners.innerHTML = `<div class="celeb-winner">${esc(ganador.nombre)}</div>`;
+    
+    celebMetrics.innerHTML = `
+      <div class="celeb-metric"><i>🌾</i><span>${fmtKg(ganador.kgTotal)}</span></div>
+      <div class="celeb-metric"><i>🟢</i><span>${fmtKg(ganador.kgExportable)} exportable</span></div>
+      <div class="celeb-metric"><i>🔴</i><span>${fmtKg(ganador.kgDescarte)} descarte</span></div>
+    `;
+    
+    celebRankBadge.textContent = "🥇 PUESTO #1";
+  }
+
+  function renderCelebracionSupervisores(resultado) {
+    const { ganadores, empate, tipo, likes, comentarios } = resultado;
+    
+    if (!ganadores.length) {
+      celebTitle.textContent = "👑 SUPERVISORES";
+      celebSubtitle.textContent = "Todavía no hay supervisores registrados";
+      celebWinners.innerHTML = "";
+      celebMetrics.innerHTML = "";
+      celebRankBadge.textContent = "";
+      return;
+    }
+    
+    if (empate) {
+      const titulos = { doble: "¡DOBLE EMPATE!", triple: "¡TRIPLE EMPATE!", multiple: "¡EMPATE MÚLTIPLE!" };
+      celebTitle.textContent = "🏆 " + (titulos[tipo] || "¡EMPATE!");
+      celebSubtitle.textContent = `Ranking total · ❤️ ${fmtNum(likes)} likes · 💬 ${fmtNum(comentarios)} comentarios`;
+      
+      celebWinners.innerHTML = ganadores.map(g => 
+        `<div class="celeb-winner tie">${esc(g.nombre)}</div>`
+      ).join("");
+      
+      celebMetrics.innerHTML = `
+        <div class="celeb-metric"><i>❤️</i><span>${fmtNum(likes)} likes</span></div>
+        <div class="celeb-metric"><i>💬</i><span>${fmtNum(comentarios)} comentarios</span></div>
+      `;
+      
+      celebRankBadge.textContent = "🥇 PUESTO #1 COMPARTIDO";
+    } else {
+      const g = ganadores[0];
+      celebTitle.textContent = "👑 ¡SUPERVISOR LÍDER!";
+      celebSubtitle.textContent = "Ranking total · ordenados por likes y comentarios";
+      
+      celebWinners.innerHTML = `<div class="celeb-winner">${esc(g.nombre)}</div>`;
+      
+      celebMetrics.innerHTML = `
+        <div class="celeb-metric"><i>❤️</i><span>${fmtNum(g.likes)} likes</span></div>
+        <div class="celeb-metric"><i>💬</i><span>${fmtNum(g.comentarios)} comentarios</span></div>
+      `;
+      
+      celebRankBadge.textContent = "🥇 PUESTO #1";
+    }
+  }
+
+  // ============================================================
+  // MOSTRAR CELEBRACIÓN SEGÚN CONTEXTO
+  // ============================================================
+  function mostrarCelebracionCosechador(modo) {
+    const key = modo === "semana" ? "ranking_semana" : "ranking_hoy";
+    if (celebShown[key]) return; // Ya se mostró en esta sesión
+    
+    if (!rkDatos || !rkDatos.rows || !rkDatos.rows.length) return;
+    
+    const ganador = getCosechadorGanador(rkDatos.rows, modo);
+    if (!ganador) return;
+    
+    celebShown[key] = true;
+    renderCelebracionCosechador(ganador, modo);
+    abrirCelebracion();
+  }
+
+  function mostrarCelebracionSupervisores() {
+    if (celebShown.supervisores) return;
+    
+    // Obtener datos de supervisores del caché de comunidad.js
+    const sups = window.comunidad && window.comunidad.getSupervisoresCache 
+      ? window.comunidad.getSupervisoresCache() 
+      : (window.supCache || {});
+    
+    const supervisoresArray = Object.values(sups);
+    if (!supervisoresArray.length) return;
+    
+    const resultado = getSupervisoresGanadores(supervisoresArray);
+    if (!resultado.ganadores.length) return;
+    
+    celebShown.supervisores = true;
+    renderCelebracionSupervisores(resultado);
+    abrirCelebracion();
+  }
+
+  // ============================================================
+  // HOOKS EN LOS CAMBIOS DE TAB / PERÍODO
+  // ============================================================
+  // Interceptar cambio de pestaña en RANKING
+  const originalRkTabTop = window.rkRenderTop;
+  const originalRkTabBus = window.rkRenderBus;
+  
+  // Interceptar botones de período HOY / ESTA SEMANA
+  function hookRankingPeriodo() {
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest("#rkPerHoy, #rkPerSem");
+      if (!btn) return;
+      
+      const modo = btn.id === "rkPerHoy" ? "hoy" : "semana";
+      // Pequeño delay para que rkDatos se actualice
+      setTimeout(() => mostrarCelebracionCosechador(modo), 150);
+    }, true);
+  }
+
+  // Hook para tabs del ranking (Ranking / Buscar)
+  function hookRankingTabs() {
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest("#rkTabTop, #rkTabBus");
+      if (!btn) return;
+      
+      // Solo mostrar al cambiar a la pestaña Ranking (no Buscar)
+      if (btn.id === "rkTabTop") {
+        setTimeout(() => {
+          const modo = rkDatos?.modo || "hoy";
+          mostrarCelebracionCosechador(modo);
+        }, 100);
+      }
+    }, true);
+  }
+
+  // Hook para supervisores
+  function hookSupervisores() {
+    // Interceptar cuando se carga la pestaña supervisores
+    const originalLoadTab = window.loadTab;
+    window.loadTab = async function(name, ...args) {
+      const result = originalLoadTab.apply(this, [name, ...args]);
+      
+      if (name === "supervisores") {
+        // Esperar a que comunidad.js cargue los datos
+        setTimeout(() => {
+          if (window.comunidad && window.comunidad.supervisores) {
+            // La función ya cargó, revisar caché
+            setTimeout(mostrarCelebracionSupervisores, 300);
+          }
+        }, 200);
+      }
+      return result;
+    };
+    
+    // También escuchar click en botón de área COMUNIDAD -> SUPERVISORES
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest("#areas button[data-area='comunidad']");
+      if (btn) {
+        setTimeout(() => {
+          const tabBtn = document.querySelector("#tabs button[data-tab='supervisores']");
+          if (tabBtn) {
+            tabBtn.onclick = () => {
+              setTimeout(mostrarCelebracionSupervisores, 300);
+            };
+          }
+        }, 100);
+      }
+    }, true);
+  }
+
+  // ============================================================
+  // RESET AL CAMBIAR DE ÁREA PRINCIPAL
+  // ============================================================
+  function resetCelebShown(area) {
+    if (area === "empleados") {
+      celebShown.ranking_hoy = false;
+      celebShown.ranking_semana = false;
+    } else if (area === "comunidad") {
+      celebShown.supervisores = false;
+    }
+  }
+
+  // Hook en showArea
+  const originalShowArea = window.showArea;
+  window.showArea = function(area, tab) {
+    resetCelebShown(area);
+    return originalShowArea.apply(this, [area, tab]);
+  };
+
+  // ============================================================
+  // INICIALIZACIÓN
+  // ============================================================
+  function init() {
+    hookRankingPeriodo();
+    hookRankingTabs();
+    hookSupervisores();
+    
+    // Exponer para debugging
+    window.celebracion = {
+      mostrarCosechador: mostrarCelebracionCosechador,
+      mostrarSupervisores: mostrarCelebracionSupervisores,
+      cerrar: cerrarCelebracion,
+      resetFlags: () => { celebShown = { ranking_hoy: false, ranking_semana: false, supervisores: false }; }
+    };
+  }
+
+  // Ejecutar cuando el DOM esté listo
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
