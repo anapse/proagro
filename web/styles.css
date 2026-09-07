@@ -744,9 +744,9 @@ body[data-static="1"] header.top{position:relative}
    ============================================================ */
 .celeb-ov{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;padding:8px}
 .celeb-ov.hidden{display:none}
-.celeb-backdrop{position:absolute;inset:0;background:rgba(6,12,8,.75);backdrop-filter:blur(6px);opacity:0;transition:opacity .35s ease}
+.celeb-backdrop{position:absolute;inset:0;background:rgba(6,12,8,.55);backdrop-filter:blur(8px);opacity:0;transition:opacity .4s ease}
 .celeb-ov.show .celeb-backdrop{opacity:1}
-.celeb-card{background:var(--panel);border:1px solid var(--border);border-radius:20px;max-width:92vw;width:100%;max-height:80vh;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.4),0 0 0 1px rgba(255,215,0,.15);position:relative;transform:scale(.5) translateY(30px);opacity:0;transition:transform .4s cubic-bezier(.22,1,.36,1),opacity .4s ease;display:flex;flex-direction:column}
+.celeb-card{background:var(--panel);border:1px solid var(--border);border-radius:20px;max-width:92vw;width:100%;max-height:80vh;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.4),0 0 0 1px rgba(255,215,0,.15);position:relative;transform:scale(.5) translateY(30px);opacity:0;transition:transform .5s cubic-bezier(.22,1,.36,1),opacity .5s ease;display:flex;flex-direction:column}
 .celeb-ov.show .celeb-card{transform:scale(1) translateY(0);opacity:1}
 .celeb-close{position:absolute;top:6px;right:8px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);width:32px;height:32px;border-radius:50%;font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;transition:all .2s ease}
 .celeb-close:hover{background:var(--danger);border-color:var(--danger);color:#fff;transform:rotate(90deg)}
@@ -757,6 +757,20 @@ body[data-static="1"] header.top{position:relative}
   0%,100%{transform:translateY(0)}
   50%{transform:translateY(-6px)}
 }
+/* Chispas alrededor del trofeo */
+.celeb-sparkles{position:absolute;inset:-20px;pointer-events:none;overflow:visible}
+.celeb-sparkle{position:absolute;width:8px;height:8px;background:#ffdf00;border-radius:50%;opacity:0;animation:sparkleBurst 1.5s ease-out infinite}
+.celeb-sparkle:nth-child(1){top:10%;left:5%;animation-delay:0s;background:#fff}
+.celeb-sparkle:nth-child(2){top:15%;right:8%;animation-delay:.2s;background:#ffdf00}
+.celeb-sparkle:nth-child(3){bottom:15%;left:8%;animation-delay:.4s;background:#fff}
+.celeb-sparkle:nth-child(4){bottom:10%;right:5%;animation-delay:.6s;background:#ffdf00}
+.celeb-sparkle:nth-child(5){top:50%;left:2%;animation-delay:.8s;background:#fff}
+.celeb-sparkle:nth-child(6){top:50%;right:2%;animation-delay:1s;background:#ffdf00}
+@keyframes sparkleBurst{
+  0%{opacity:1;transform:scale(0) rotate(0deg)}
+  50%{opacity:1;transform:scale(1.2) rotate(180deg)}
+  100%{opacity:0;transform:scale(0) rotate(360deg)}
+}
 .celeb-title{margin:0 0 4px;font-size:clamp(16px,4vw,22px);font-weight:900;color:var(--accent);letter-spacing:.3px;line-height:1.15}
 .celeb-winners{margin:0 0 8px}
 .celeb-winner{font-size:clamp(15px,3.5vw,20px);font-weight:800;color:var(--text);margin:2px 0;line-height:1.2;overflow-wrap:anywhere;word-break:break-word}
@@ -764,7 +778,7 @@ body[data-static="1"] header.top{position:relative}
 .celeb-metrics{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:0 0 8px}
 .celeb-metric{display:flex;align-items:center;gap:4px;background:var(--panel2);border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:clamp(10px,2.2vw,12px);font-weight:700;color:var(--text)}
 .celeb-metric i{font-style:normal;font-size:1em}
-.celeb-rank-badge{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,rgba(255,215,0,.18),rgba(255,215,0,.08));border:2px solid var(--accent);border-radius:999px;padding:8px 14px;font-size:clamp(12px,2.5vw,15px);font-weight:900;color:var(--accent);margin-top:4px}
+.celeb-rank-badge{display:none}
 @media(max-width:480px){
   .celeb-card{margin:4px;border-radius:16px;max-height:82vh}
   .celeb-trophy-wrap{width:120px;height:150px}
@@ -772,12 +786,12 @@ body[data-static="1"] header.top{position:relative}
   .celeb-metric{padding:4px 8px;font-size:10px}
   .celeb-title{font-size:clamp(14px,4vw,18px)}
   .celeb-winner{font-size:clamp(13px,3.5vw,17px)}
-  .celeb-rank-badge{padding:6px 10px;font-size:clamp(11px,2.5vw,13px)}
 }
 @media(prefers-reduced-motion:reduce){
   .celeb-card{transition:none;transform:none;opacity:1}
-  .celeb-backdrop{transition:none;opacity:.75}
+  .celeb-backdrop{transition:none;opacity:.55}
   .celeb-trophy-img{animation:none}
+  .celeb-sparkle{animation:none;opacity:0}
 }
 
 /* Confeti */
