@@ -2503,70 +2503,67 @@ function iniciarBienvenida() {
   }
 
   // ============================================================
-  // RENDERIZADO DEL MODAL
-  // ============================================================
-  function renderCelebracionCosechador(ganador, modo) {
-    const esSemana = modo === "semana";
-    const titulo = esSemana 
-      ? "¡EL MEJOR COSECHADOR DE LA SEMANA!" 
-      : "¡EL MEJOR COSECHADOR DEL DÍA!";
+    // RENDERIZADO DEL MODAL
+    // ============================================================
+    function renderCelebracionCosechador(ganador, modo) {
+      const esSemana = modo === "semana";
+      const titulo = esSemana 
+        ? "¡EL MEJOR COSECHADOR DE LA SEMANA!" 
+        : "¡EL MEJOR COSECHADOR DEL DÍA!";
     
-    celebTitle.textContent = "🏆 " + titulo;
-    celebSubtitle.textContent = `Periodo: ${esSemana ? "Semana (Lun→Sáb)" : "Día"} · Datos reales de PROAGRO`;
+      celebTitle.textContent = "🏆 " + titulo;
+      // Sin subtítulo para ahorrar espacio
     
-    celebWinners.innerHTML = `<div class="celeb-winner">${esc(ganador.nombre)}</div>`;
+      celebWinners.innerHTML = `<div class="celeb-winner">${esc(ganador.nombre)}</div>`;
     
-    celebMetrics.innerHTML = `
-      <div class="celeb-metric"><i>🌾</i><span>${fmtKg(ganador.kgTotal)}</span></div>
-      <div class="celeb-metric"><i>🟢</i><span>${fmtKg(ganador.kgExportable)} exportable</span></div>
-      <div class="celeb-metric"><i>🔴</i><span>${fmtKg(ganador.kgDescarte)} descarte</span></div>
-    `;
-    
-    celebRankBadge.textContent = "🥇 PUESTO #1";
-  }
-
-  function renderCelebracionSupervisores(resultado) {
-    const { ganadores, empate, tipo, likes, comentarios } = resultado;
-    
-    if (!ganadores.length) {
-      celebTitle.textContent = "👑 SUPERVISORES";
-      celebSubtitle.textContent = "Todavía no hay supervisores registrados";
-      celebWinners.innerHTML = "";
-      celebMetrics.innerHTML = "";
-      celebRankBadge.textContent = "";
-      return;
-    }
-    
-    if (empate) {
-      const titulos = { doble: "¡DOBLE EMPATE!", triple: "¡TRIPLE EMPATE!", multiple: "¡EMPATE MÚLTIPLE!" };
-      celebTitle.textContent = "🏆 " + (titulos[tipo] || "¡EMPATE!");
-      celebSubtitle.textContent = `Ranking total · ❤️ ${fmtNum(likes)} likes · 💬 ${fmtNum(comentarios)} comentarios`;
-      
-      celebWinners.innerHTML = ganadores.map(g => 
-        `<div class="celeb-winner tie">${esc(g.nombre)}</div>`
-      ).join("");
-      
       celebMetrics.innerHTML = `
-        <div class="celeb-metric"><i>❤️</i><span>${fmtNum(likes)} likes</span></div>
-        <div class="celeb-metric"><i>💬</i><span>${fmtNum(comentarios)} comentarios</span></div>
+        <div class="celeb-metric"><i>🌾</i><span>${fmtKg(ganador.kgTotal)}</span></div>
       `;
-      
-      celebRankBadge.textContent = "🥇 PUESTO #1 COMPARTIDO";
-    } else {
-      const g = ganadores[0];
-      celebTitle.textContent = "👑 ¡SUPERVISOR LÍDER!";
-      celebSubtitle.textContent = "Ranking total · ordenados por likes y comentarios";
-      
-      celebWinners.innerHTML = `<div class="celeb-winner">${esc(g.nombre)}</div>`;
-      
-      celebMetrics.innerHTML = `
-        <div class="celeb-metric"><i>❤️</i><span>${fmtNum(g.likes)} likes</span></div>
-        <div class="celeb-metric"><i>💬</i><span>${fmtNum(g.comentarios)} comentarios</span></div>
-      `;
-      
+    
       celebRankBadge.textContent = "🥇 PUESTO #1";
     }
-  }
+
+  function renderCelebracionSupervisores(resultado) {
+      const { ganadores, empate, tipo, likes, comentarios } = resultado;
+    
+      if (!ganadores.length) {
+        celebTitle.textContent = "👑 LÍDER";
+        celebWinners.innerHTML = "";
+        celebMetrics.innerHTML = "";
+        celebRankBadge.textContent = "";
+        return;
+      }
+    
+      if (empate) {
+        const titulos = { doble: "¡DOBLE EMPATE!", triple: "¡TRIPLE EMPATE!", multiple: "¡EMPATE MÚLTIPLE!" };
+        celebTitle.textContent = "🏆 " + (titulos[tipo] || "¡EMPATE!");
+        // Sin subtítulo
+      
+        celebWinners.innerHTML = ganadores.map(g => 
+          `<div class="celeb-winner tie">${esc(g.nombre)}</div>`
+        ).join("");
+      
+        celebMetrics.innerHTML = `
+          <div class="celeb-metric"><i>❤️</i><span>${fmtNum(likes)} likes</span></div>
+          <div class="celeb-metric"><i>💬</i><span>${fmtNum(comentarios)} comentarios</span></div>
+        `;
+      
+        celebRankBadge.textContent = "🥇 PUESTO #1 COMPARTIDO";
+      } else {
+        const g = ganadores[0];
+        celebTitle.textContent = "👑 ¡LÍDER!";
+        // Sin subtítulo
+      
+        celebWinners.innerHTML = `<div class="celeb-winner">${esc(g.nombre)}</div>`;
+      
+        celebMetrics.innerHTML = `
+          <div class="celeb-metric"><i>❤️</i><span>${fmtNum(g.likes)} likes</span></div>
+          <div class="celeb-metric"><i>💬</i><span>${fmtNum(g.comentarios)} comentarios</span></div>
+        `;
+      
+        celebRankBadge.textContent = "🥇 PUESTO #1";
+      }
+    }
 
   // ============================================================
   // MOSTRAR CELEBRACIÓN SEGÚN CONTEXTO
