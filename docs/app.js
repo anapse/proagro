@@ -351,7 +351,15 @@ async function cargarRanking(modo) {
   modo = modo || rkDatos.modo || "hoy";
   const hoy = hoyLocalISO();
   const cacheKey = modo + "_" + hoy;
-  if (rkDatos.ts && rkDatos.cacheKey === cacheKey && Date.now() - rkDatos.ts < 120000) { rkRenderShell(); return; }
+  if (rkDatos.ts && rkDatos.cacheKey === cacheKey && Date.now() - rkDatos.ts < 120000) { 
+    rkRenderShell(); 
+    // Si viene de caché, mostrar celebración directamente
+    setTimeout(() => mostrarCelebracionConDatos(modo), 100);
+    return; 
+  }
+  // Mostrar loading modal mientras consulta
+  if (typeof mostrarLoadingRanking === "function") mostrarLoadingRanking();
+  
   panel.innerHTML = `<div class="qr-sec"><h2>🏆 RANKING</h2><div class="cardbox" id="rkBox"><p>Consultando ranking real…</p></div></div>`;
   try {
     let dias = [];         // ISO de los días cargados
@@ -368,6 +376,7 @@ async function cargarRanking(modo) {
       if (!dias.length) {
         rkDatos = { rows: [], lotes: [], variedades: [], finIso: hoy, label: "📅 HOY → PROAGRO aún no publica el ranking de hoy ni de los últimos días (publica el del día anterior). Prueba ESTA SEMANA.", ts: Date.now(), cacheKey, modo };
         rkRenderShell();
+        if (typeof cerrarCelebracion === "function") cerrarCelebracion();
         return;
       }
     } else {
@@ -398,20 +407,21 @@ async function cargarRanking(modo) {
       }));
       const rows = Object.values(agg).sort((x, y) => y.kgTotal - x.kgTotal)
               .map((x, i) => ({ posicion: i + 1, nombre: x.nombre, kgExportable: x.kgExportable, kgDescarte: x.kgDescarte, kgTotal: x.kgTotal, dias: x.dias }));
-            rkDatos = { rows, lotes: [], variedades: [], finIso: hoy, label, ts: Date.now(), cacheKey, modo };
-            rkRenderShell();
-            // Mostrar celebración de la semana al cargar el ranking
-            setTimeout(() => mostrarCelebracionCosechador("semana"), 200);
-            return;
-          }
-          const filas = dias.length ? hallado : [];
-          rkDatos = { rows: filas.map((r2, i) => ({ ...r2, posicion: r2.posicion != null ? r2.posicion : i + 1 })), lotes: [], variedades: [], finIso: dias[0], label, ts: Date.now(), cacheKey, modo };
-          rkRenderShell();
-          // Mostrar celebración del día al cargar el ranking
-          setTimeout(() => mostrarCelebracionCosechador("hoy"), 200);
+      rkDatos = { rows, lotes: [], variedades: [], finIso: hoy, label, ts: Date.now(), cacheKey, modo };
+      rkRenderShell();
+      // Mostrar celebración de la semana al cargar el ranking
+      if (typeof mostrarCelebracionConDatos === "function") setTimeout(() => mostrarCelebracionConDatos("semana"), 200);
+      return;
+    }
+    const filas = dias.length ? hallado : [];
+    rkDatos = { rows: filas.map((r2, i) => ({ ...r2, posicion: r2.posicion != null ? r2.posicion : i + 1 })), lotes: [], variedades: [], finIso: dias[0], label, ts: Date.now(), cacheKey, modo };
+    rkRenderShell();
+    // Mostrar celebración del día al cargar el ranking
+    if (typeof mostrarCelebracionConDatos === "function") setTimeout(() => mostrarCelebracionConDatos("hoy"), 200);
   } catch (e) {
     const box = $("#rkBox");
     if (box) box.innerHTML = `<p><b>❌ ERROR DE CONSULTA</b></p><p class="small muted">${esc(e && e.message || e)} — Worker: ${esc(workerUrl || "—")}</p>`;
+    if (typeof cerrarCelebracion === "function") cerrarCelebracion();
   }
 }
 
@@ -2409,44 +2419,79 @@ function iniciarBienvenida() {
   // ============================================================
     // ANIMACIÓN DE ENTRADA DE LA TARJETA
     // ============================================================
-    function abrirCelebracion() {
+    function abrirCelebracion(modoLoading = false) {
       if (!celebOv) return;
-    
+
       // Reset de animaciones
       celebOv.classList.remove("show");
       // Forzar reflow
       void celebOv.offsetWidth;
-    
+
+      // Modo loading vs celebración
+      if (modoLoading) {
+        celebOv.classList.add("loading");
+        celebTitle.textContent = "⏳ Cargando ranking...";
+        celebWinners.innerHTML = "";
+        celebMetrics.innerHTML = "";
+      } else {
+        celebOv.classList.remove("loading");
+      }
+
       celebOv.classList.remove("hidden");
       celebOv.classList.add("show");
-    
+
       // Bloquear scroll del body
       document.body.style.overflow = "hidden";
-    
-      // Disparar confeti después de la animación principal
-      setTimeout(crearConfeti, 700);
-    
-      // Auto-cerrar después de 2 segundos
-      if (celebAutoCloseTimer) clearTimeout(celebAutoCloseTimer);
-      celebAutoCloseTimer = setTimeout(() => {
-        cerrarCelebracion();
-      }, 2000);
+
+      // Disparar confeti después de la animación principal (solo en modo celebración)
+      if (!modoLoading) {
+        setTimeout(crearConfeti, 800);
+      }
+
+      // Auto-cerrar después de 3 segundos (solo en modo celebración)
+      if (!modoLoading) {
+        if (celebAutoCloseTimer) clearTimeout(celebAutoCloseTimer);
+        celebAutoCloseTimer = setTimeout(() => {
+          cerrarCelebracion();
+        }, 3000);
+      }
     }
 
     function cerrarCelebracion() {
       if (!celebOv) return;
-    
+
       // Limpiar timer de auto-cierre
       if (celebAutoCloseTimer) {
         clearTimeout(celebAutoCloseTimer);
         celebAutoCloseTimer = null;
       }
-    
+
       celebOv.classList.remove("show");
+      celebOv.classList.remove("loading");
       setTimeout(() => {
         celebOv.classList.add("hidden");
         document.body.style.overflow = "";
-      }, 350);
+      }, 400);
+    }
+
+    // Mostrar loading mientras carga el ranking
+    function mostrarLoadingRanking() {
+      abrirCelebracion(true);
+    }
+
+    // Convertir loading a celebración con datos
+    function mostrarCelebracionConDatos(modo) {
+      if (!rkDatos || !rkDatos.rows || !rkDatos.rows.length) {
+        cerrarCelebracion();
+        return;
+      }
+      const ganador = getCosechadorGanador(rkDatos.rows, modo);
+      if (!ganador) {
+        cerrarCelebracion();
+        return;
+      }
+      renderCelebracionCosechador(ganador, modo);
+      abrirCelebracion(false);
     }
 
   // Event listeners
@@ -2600,22 +2645,29 @@ function iniciarBienvenida() {
     }
 
     function mostrarCelebracionSupervisores() {
-      // Se muestra cada vez que se abre supervisores
-    
-      // Obtener datos de supervisores del caché de comunidad.js
-      const sups = window.comunidad && window.comunidad.getSupervisoresCache 
-        ? window.comunidad.getSupervisoresCache() 
-        : (window.supCache || {});
-    
-      const supervisoresArray = Object.values(sups);
-      if (!supervisoresArray.length) return;
-    
-      const resultado = getSupervisoresGanadores(supervisoresArray);
-      if (!resultado.ganadores.length) return;
-    
-      renderCelebracionSupervisores(resultado);
-      abrirCelebracion();
-    }
+          // Se muestra cada vez que se abre supervisores
+
+          // Obtener datos de supervisores del caché de comunidad.js
+          const sups = window.comunidad && window.comunidad.getSupervisoresCache 
+            ? window.comunidad.getSupervisoresCache() 
+            : (window.supCache || {});
+
+          const supervisoresArray = Object.values(sups);
+          if (!supervisoresArray.length) return;
+
+          const resultado = getSupervisoresGanadores(supervisoresArray);
+          if (!resultado.ganadores.length) return;
+
+          renderCelebracionSupervisores(resultado);
+          abrirCelebracion(false);
+        }
+
+        // Wrapper para cosechadores que usa la nueva función con datos
+        function mostrarCelebracionCosechador(modo) {
+          if (typeof mostrarCelebracionConDatos === "function") {
+            mostrarCelebracionConDatos(modo);
+          }
+        }
 
   // ============================================================
   // HOOKS EN LOS CAMBIOS DE TAB / PERÍODO
@@ -2625,32 +2677,38 @@ function iniciarBienvenida() {
   const originalRkTabBus = window.rkRenderBus;
   
   // Interceptar botones de período HOY / ESTA SEMANA
-  function hookRankingPeriodo() {
-    document.addEventListener("click", (e) => {
-      const btn = e.target.closest("#rkPerHoy, #rkPerSem");
-      if (!btn) return;
-      
-      const modo = btn.id === "rkPerHoy" ? "hoy" : "semana";
-      // Pequeño delay para que rkDatos se actualice
-      setTimeout(() => mostrarCelebracionCosechador(modo), 150);
-    }, true);
-  }
+    function hookRankingPeriodo() {
+      document.addEventListener("click", (e) => {
+        const btn = e.target.closest("#rkPerHoy, #rkPerSem");
+        if (!btn) return;
+
+        const modo = btn.id === "rkPerHoy" ? "hoy" : "semana";
+        // Pequeño delay para que rkDatos se actualice
+        setTimeout(() => {
+          if (typeof mostrarCelebracionConDatos === "function") {
+            mostrarCelebracionConDatos(modo);
+          }
+        }, 150);
+      }, true);
+    }
 
   // Hook para tabs del ranking (Ranking / Buscar)
-  function hookRankingTabs() {
-    document.addEventListener("click", (e) => {
-      const btn = e.target.closest("#rkTabTop, #rkTabBus");
-      if (!btn) return;
-      
-      // Solo mostrar al cambiar a la pestaña Ranking (no Buscar)
-      if (btn.id === "rkTabTop") {
-        setTimeout(() => {
-          const modo = rkDatos?.modo || "hoy";
-          mostrarCelebracionCosechador(modo);
-        }, 100);
-      }
-    }, true);
-  }
+    function hookRankingTabs() {
+      document.addEventListener("click", (e) => {
+        const btn = e.target.closest("#rkTabTop, #rkTabBus");
+        if (!btn) return;
+
+        // Solo mostrar al cambiar a la pestaña Ranking (no Buscar)
+        if (btn.id === "rkTabTop") {
+          setTimeout(() => {
+            const modo = rkDatos?.modo || "hoy";
+            if (typeof mostrarCelebracionConDatos === "function") {
+              mostrarCelebracionConDatos(modo);
+            }
+          }, 100);
+        }
+      }, true);
+    }
 
   // Hook para supervisores
   function hookSupervisores() {
