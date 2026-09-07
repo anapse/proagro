@@ -2240,9 +2240,9 @@ function copiarLink() {
 }
 function shareApp() {
   const url = urlActual();
-  const texto = "📱 PROAGRO WEB\n\nConsulta tus cosechas, ranking, QR Digital, promedios y nuevas herramientas.\n\nIngresa aquí:\n" + url;
+  const texto = "📱 WEB — Empleados y Forense\n\nConsulta tus cosechas, ranking, QR Digital, promedios y nuevas herramientas.\n\nIngresa aquí:\n" + url;
   if (navigator.share) {
-    navigator.share({ title: "PROAGRO WEB", text: texto, url: url }).catch(() => { });
+    navigator.share({ title: "WEB — Empleados y Forense", text: texto, url: url }).catch(() => { });
   } else {
     copiarLink();
   }
