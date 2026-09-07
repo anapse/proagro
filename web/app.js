@@ -397,14 +397,18 @@ async function cargarRanking(modo) {
         a.dias++;
       }));
       const rows = Object.values(agg).sort((x, y) => y.kgTotal - x.kgTotal)
-        .map((x, i) => ({ posicion: i + 1, nombre: x.nombre, kgExportable: x.kgExportable, kgDescarte: x.kgDescarte, kgTotal: x.kgTotal, dias: x.dias }));
-      rkDatos = { rows, lotes: [], variedades: [], finIso: hoy, label, ts: Date.now(), cacheKey, modo };
-      rkRenderShell();
-      return;
-    }
-    const filas = dias.length ? hallado : [];
-    rkDatos = { rows: filas.map((r2, i) => ({ ...r2, posicion: r2.posicion != null ? r2.posicion : i + 1 })), lotes: [], variedades: [], finIso: dias[0], label, ts: Date.now(), cacheKey, modo };
-    rkRenderShell();
+              .map((x, i) => ({ posicion: i + 1, nombre: x.nombre, kgExportable: x.kgExportable, kgDescarte: x.kgDescarte, kgTotal: x.kgTotal, dias: x.dias }));
+            rkDatos = { rows, lotes: [], variedades: [], finIso: hoy, label, ts: Date.now(), cacheKey, modo };
+            rkRenderShell();
+            // Mostrar celebración de la semana al cargar el ranking
+            setTimeout(() => mostrarCelebracionCosechador("semana"), 200);
+            return;
+          }
+          const filas = dias.length ? hallado : [];
+          rkDatos = { rows: filas.map((r2, i) => ({ ...r2, posicion: r2.posicion != null ? r2.posicion : i + 1 })), lotes: [], variedades: [], finIso: dias[0], label, ts: Date.now(), cacheKey, modo };
+          rkRenderShell();
+          // Mostrar celebración del día al cargar el ranking
+          setTimeout(() => mostrarCelebracionCosechador("hoy"), 200);
   } catch (e) {
     const box = $("#rkBox");
     if (box) box.innerHTML = `<p><b>❌ ERROR DE CONSULTA</b></p><p class="small muted">${esc(e && e.message || e)} — Worker: ${esc(workerUrl || "—")}</p>`;
@@ -2315,12 +2319,15 @@ function iniciarBienvenida() {
 (function initCelebracion() {
   "use strict";
 
-  // Estado para evitar apertura repetida
-  let celebShown = {
-    ranking_hoy: false,
-    ranking_semana: false,
-    supervisores: false
-  };
+  // Estado para controlar apertura (se resetea al cambiar de área, no por sesión)
+    let celebShown = {
+      ranking_hoy: false,
+      ranking_semana: false,
+      supervisores: false
+    };
+  
+    // Timer para auto-cierre
+    let celebAutoCloseTimer = null;
 
   // Elementos del DOM
   const celebOv = $("#celebracionOv");
@@ -2400,35 +2407,47 @@ function iniciarBienvenida() {
   }
 
   // ============================================================
-  // ANIMACIÓN DE ENTRADA DE LA TARJETA
-  // ============================================================
-  function abrirCelebracion() {
-    if (!celebOv) return;
+    // ANIMACIÓN DE ENTRADA DE LA TARJETA
+    // ============================================================
+    function abrirCelebracion() {
+      if (!celebOv) return;
     
-    // Reset de animaciones
-    celebOv.classList.remove("show");
-    // Forzar reflow
-    void celebOv.offsetWidth;
+      // Reset de animaciones
+      celebOv.classList.remove("show");
+      // Forzar reflow
+      void celebOv.offsetWidth;
     
-    celebOv.classList.remove("hidden");
-    celebOv.classList.add("show");
+      celebOv.classList.remove("hidden");
+      celebOv.classList.add("show");
     
-    // Bloquear scroll del body
-    document.body.style.overflow = "hidden";
+      // Bloquear scroll del body
+      document.body.style.overflow = "hidden";
     
-    // Disparar confeti después de la animación principal
-    setTimeout(crearConfeti, 700);
-  }
+      // Disparar confeti después de la animación principal
+      setTimeout(crearConfeti, 700);
+    
+      // Auto-cerrar después de 2 segundos
+      if (celebAutoCloseTimer) clearTimeout(celebAutoCloseTimer);
+      celebAutoCloseTimer = setTimeout(() => {
+        cerrarCelebracion();
+      }, 2000);
+    }
 
-  function cerrarCelebracion() {
-    if (!celebOv) return;
+    function cerrarCelebracion() {
+      if (!celebOv) return;
     
-    celebOv.classList.remove("show");
-    setTimeout(() => {
-      celebOv.classList.add("hidden");
-      document.body.style.overflow = "";
-    }, 350);
-  }
+      // Limpiar timer de auto-cierre
+      if (celebAutoCloseTimer) {
+        clearTimeout(celebAutoCloseTimer);
+        celebAutoCloseTimer = null;
+      }
+    
+      celebOv.classList.remove("show");
+      setTimeout(() => {
+        celebOv.classList.add("hidden");
+        document.body.style.overflow = "";
+      }, 350);
+    }
 
   // Event listeners
   if (celebClose) celebClose.onclick = (e) => { e.stopPropagation(); cerrarCelebracion(); };
@@ -2517,11 +2536,11 @@ function iniciarBienvenida() {
       celebWinners.innerHTML = `<div class="celeb-winner">${esc(ganador.nombre)}</div>`;
     
       celebMetrics.innerHTML = `
-        <div class="celeb-metric"><i>🌾</i><span>${fmtKg(ganador.kgTotal)}</span></div>
-      `;
-    
-      celebRankBadge.textContent = "🥇 PUESTO #1";
-    }
+              <div class="celeb-metric"><i>🌾</i><span>${fmtKg(ganador.kgTotal)}</span></div>
+            `;
+
+            celebRankBadge.textContent = "";
+          }
 
   function renderCelebracionSupervisores(resultado) {
       const { ganadores, empate, tipo, likes, comentarios } = resultado;
@@ -2548,58 +2567,55 @@ function iniciarBienvenida() {
           <div class="celeb-metric"><i>💬</i><span>${fmtNum(comentarios)} comentarios</span></div>
         `;
       
-        celebRankBadge.textContent = "🥇 PUESTO #1 COMPARTIDO";
-      } else {
-        const g = ganadores[0];
-        celebTitle.textContent = "👑 ¡LÍDER!";
-        // Sin subtítulo
-      
-        celebWinners.innerHTML = `<div class="celeb-winner">${esc(g.nombre)}</div>`;
-      
-        celebMetrics.innerHTML = `
-          <div class="celeb-metric"><i>❤️</i><span>${fmtNum(g.likes)} likes</span></div>
-          <div class="celeb-metric"><i>💬</i><span>${fmtNum(g.comentarios)} comentarios</span></div>
-        `;
-      
-        celebRankBadge.textContent = "🥇 PUESTO #1";
-      }
+        celebRankBadge.textContent = "";
+              } else {
+                const g = ganadores[0];
+                celebTitle.textContent = "👑 ¡LÍDER!";
+                // Sin subtítulo
+
+                celebWinners.innerHTML = `<div class="celeb-winner">${esc(g.nombre)}</div>`;
+
+                celebMetrics.innerHTML = `
+                  <div class="celeb-metric"><i>❤️</i><span>${fmtNum(g.likes)} likes</span></div>
+                  <div class="celeb-metric"><i>💬</i><span>${fmtNum(g.comentarios)} comentarios</span></div>
+                `;
+
+                celebRankBadge.textContent = "";
+              }
     }
 
   // ============================================================
-  // MOSTRAR CELEBRACIÓN SEGÚN CONTEXTO
-  // ============================================================
-  function mostrarCelebracionCosechador(modo) {
-    const key = modo === "semana" ? "ranking_semana" : "ranking_hoy";
-    if (celebShown[key]) return; // Ya se mostró en esta sesión
+    // MOSTRAR CELEBRACIÓN SEGÚN CONTEXTO
+    // ============================================================
+    function mostrarCelebracionCosechador(modo) {
+      // Se muestra cada vez que se abre el ranking (día o semana)
     
-    if (!rkDatos || !rkDatos.rows || !rkDatos.rows.length) return;
+      if (!rkDatos || !rkDatos.rows || !rkDatos.rows.length) return;
     
-    const ganador = getCosechadorGanador(rkDatos.rows, modo);
-    if (!ganador) return;
+      const ganador = getCosechadorGanador(rkDatos.rows, modo);
+      if (!ganador) return;
     
-    celebShown[key] = true;
-    renderCelebracionCosechador(ganador, modo);
-    abrirCelebracion();
-  }
+      renderCelebracionCosechador(ganador, modo);
+      abrirCelebracion();
+    }
 
-  function mostrarCelebracionSupervisores() {
-    if (celebShown.supervisores) return;
+    function mostrarCelebracionSupervisores() {
+      // Se muestra cada vez que se abre supervisores
     
-    // Obtener datos de supervisores del caché de comunidad.js
-    const sups = window.comunidad && window.comunidad.getSupervisoresCache 
-      ? window.comunidad.getSupervisoresCache() 
-      : (window.supCache || {});
+      // Obtener datos de supervisores del caché de comunidad.js
+      const sups = window.comunidad && window.comunidad.getSupervisoresCache 
+        ? window.comunidad.getSupervisoresCache() 
+        : (window.supCache || {});
     
-    const supervisoresArray = Object.values(sups);
-    if (!supervisoresArray.length) return;
+      const supervisoresArray = Object.values(sups);
+      if (!supervisoresArray.length) return;
     
-    const resultado = getSupervisoresGanadores(supervisoresArray);
-    if (!resultado.ganadores.length) return;
+      const resultado = getSupervisoresGanadores(supervisoresArray);
+      if (!resultado.ganadores.length) return;
     
-    celebShown.supervisores = true;
-    renderCelebracionSupervisores(resultado);
-    abrirCelebracion();
-  }
+      renderCelebracionSupervisores(resultado);
+      abrirCelebracion();
+    }
 
   // ============================================================
   // HOOKS EN LOS CAMBIOS DE TAB / PERÍODO
