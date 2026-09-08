@@ -31,7 +31,11 @@ function renderTagNombre() {
 }
 
 /* ---- áreas 👥 EMPLEADOS / 🔬 FORENSE ---- */
-const TABS_EMPLEADOS = [["qrdigital", "📱 QR DIGITAL"], ["qrkg", "🌾 COSECHA"], ["ranking", "🏆 RANKING"]];
+const TABS_EMPLEADOS = [["qrkg", "🌾 COSECHA"], ["ranking", "🏆 RANKING"]];
+// DESACTIVACIÓN TEMPORAL QR DIGITAL (reversible): la pestaña qrdigital se quitó de la navegación.
+// Para reactivar: agrega ["qrdigital","📱 QR DIGITAL"] al inicio de TABS_EMPLEADOS y de
+// TABS_POR_AREA.empleados, y vuelve el default de "empleados" a "qrdigital".
+// qdBind() y <section id="panel-qrdigital"> siguen intactos (no se borran).
 const TABS_FORENSE = [["resumen", "Resumen"], ["endpoints", "🔌 Endpoints"], ["network", "Network"],
   ["javascript", "JavaScript"], ["signalr", "SignalR"], ["kg", "KG Integrity"], ["errores", "Errores"],
   ["consistencia", "Consistencia"], ["snapshots", "Snapshots"], ["hallazgos", "Hallazgos"],
@@ -39,7 +43,7 @@ const TABS_FORENSE = [["resumen", "Resumen"], ["endpoints", "🔌 Endpoints"], [
 const areaDeTab = (n) => (n === "qrdigital" || n === "qrkg" || n === "ranking") ? "empleados"
   : (n === "noticias" || n === "encuestas" || n === "supervisores") ? "comunidad" : "forense";
 const TABS_POR_AREA = {
-  empleados: [["qrdigital", "📱 QR DIGITAL"], ["qrkg", "🌾 COSECHA"], ["ranking", "🏆 RANKING"]],
+  empleados: [["qrkg", "🌾 COSECHA"], ["ranking", "🏆 RANKING"]], // (QR DIGITAL desactivado temporalmente — ver TABS_EMPLEADOS)
   comunidad: [["noticias", "📰 NOTICIAS"], ["encuestas", "📊 ENCUESTAS"], ["supervisores", "🏆 SUPERVISORES"]],
   forense: [["resumen", "Resumen"], ["endpoints", "🔌 Endpoints"], ["network", "Network"],
     ["javascript", "JavaScript"], ["signalr", "SignalR"], ["kg", "KG Integrity"], ["errores", "Errores"],
@@ -70,7 +74,7 @@ function showArea(area, tab) {
   document.body.dataset.area = area;
   syncAreaButtons();
   renderNav();
-  const def = area === "empleados" ? "qrdigital" : area === "comunidad" ? "noticias" : "resumen";
+  const def = area === "empleados" ? "qrkg" : /* (QR DIGITAL desactivado; default = COSECHA) */ area === "comunidad" ? "noticias" : "resumen";
   return goTab(tab || def);
 }
 
@@ -193,8 +197,8 @@ async function boot() {
     }
     bindEvents();
     setInterval(syncStatus, 2500);
-    // Área predeterminada al abrir: 👥 EMPLEADOS → 📱 QR DIGITAL
-    await showArea("empleados", "qrdigital");
+    // Área predeterminada al abrir: 👥 EMPLEADOS → 🌾 COSECHA (QR DIGITAL desactivado temporalmente)
+    await showArea("empleados", "qrkg");
     status("Listo");
   } catch (e) { status("Error de conexión con el backend: " + e.message, true); }
 }
@@ -380,39 +384,44 @@ async function cargarRanking(modo) {
         return;
       }
     } else {
-      // ESTA SEMANA: siempre desde el LUNES (máx sábado; domingo no se muestra)
-      const semana = dashDiasSemana();
-      const conDatos = [];
-      for (const iso of semana) { const f = await rkFetchDia(iso); if (f.length) conDatos.push([iso, f]); }
-      if (!conDatos.length) {
-        // esta semana aún no tiene datos publicados → semana ANTERIOR completa (lun→sáb)
-        const prev = dashDiasPreviosSemana(semana[0]);
-        for (const iso of prev) { const f = await rkFetchDia(iso); if (f.length) conDatos.push([iso, f]); }
-        label = "🌾 Semana ANTERIOR (" + dashFmt(prev[0]) + " → " + dashFmt(prev[prev.length - 1]) + ") — esta semana aún no tiene ranking publicado";
-        dias = prev;
-      } else {
-        dias = semana;
-        const usados = conDatos.map(([iso]) => iso);
-        label = "🌾 ESTA SEMANA: lunes " + dashFmt(semana[0]) + " → " + dashFmt(semana[semana.length - 1]) + " · " + usados.length + " día(s) con datos (" + usados.map(dashFmt).join(", ") + ")";
-      }
-      // acumular por persona (kg reales de cada día publicado)
-      const agg = {};
-      conDatos.forEach(([, filas]) => filas.forEach(r2 => {
-        const nom2 = String(r2.nombre || "—");
-        const a = agg[nom2] || (agg[nom2] = { nombre: nom2, kgExportable: 0, kgDescarte: 0, kgTotal: 0, dias: 0 });
-        a.kgExportable += Number(r2.kgExportable) || 0;
-        a.kgDescarte += Number(r2.kgDescarte) || 0;
-        a.kgTotal += Number(r2.kgTotal) || 0;
-        a.dias++;
-      }));
-      const rows = Object.values(agg).sort((x, y) => y.kgTotal - x.kgTotal)
-              .map((x, i) => ({ posicion: i + 1, nombre: x.nombre, kgExportable: x.kgExportable, kgDescarte: x.kgDescarte, kgTotal: x.kgTotal, dias: x.dias }));
-      rkDatos = { rows, lotes: [], variedades: [], finIso: hoy, label, ts: Date.now(), cacheKey, modo };
-      rkRenderShell();
-      // Mostrar celebración de la semana al cargar el ranking
-      if (typeof mostrarCelebracionConDatos === "function") setTimeout(() => mostrarCelebracionConDatos("semana"), 200);
-      return;
-    }
+          // ESTA SEMANA: siempre desde el LUNES (máx sábado; domingo no se muestra)
+          const semana = dashDiasSemana();
+          const conDatos = [];
+          for (const iso of semana) { const f = await rkFetchDia(iso); if (f.length) conDatos.push([iso, f]); }
+          if (!conDatos.length) {
+            // esta semana aún no tiene datos publicados → semana ANTERIOR completa (lun→sáb)
+            const prev = dashDiasPreviosSemana(semana[0]);
+            for (const iso of prev) { const f = await rkFetchDia(iso); if (f.length) conDatos.push([iso, f]); }
+            label = "🌾 Semana ANTERIOR (" + dashFmt(prev[0]) + " → " + dashFmt(prev[prev.length - 1]) + ") — esta semana aún no tiene ranking publicado";
+            dias = prev;
+          } else {
+            dias = semana; // usar TODOS los días de la semana para el acumulado, aunque algunos tengan 0 datos
+            const usados = conDatos.map(([iso]) => iso);
+            label = "🌾 ESTA SEMANA: lunes " + dashFmt(semana[0]) + " → " + dashFmt(semana[semana.length - 1]) + " · " + usados.length + " día(s) con datos (" + usados.map(dashFmt).join(", ") + ")";
+          }
+          // acumular por persona (kg reales de cada día publicado)
+          const agg = {};
+          // iterar sobre TODOS los días de la semana (dias) para asegurar 0 cuando no hay datos
+          for (const iso of dias) {
+            const filasDia = await rkFetchDia(iso);
+            if (!filasDia.length) continue; // día sin datos → aporta 0
+            filasDia.forEach(r2 => {
+              const nom2 = String(r2.nombre || "—");
+              const a = agg[nom2] || (agg[nom2] = { nombre: nom2, kgExportable: 0, kgDescarte: 0, kgTotal: 0, dias: 0 });
+              a.kgExportable += Number(r2.kgExportable) || 0;
+              a.kgDescarte += Number(r2.kgDescarte) || 0;
+              a.kgTotal += Number(r2.kgTotal) || 0;
+              a.dias++;
+            });
+          }
+          const rows = Object.values(agg).sort((x, y) => y.kgTotal - x.kgTotal)
+                  .map((x, i) => ({ posicion: i + 1, nombre: x.nombre, kgExportable: x.kgExportable, kgDescarte: x.kgDescarte, kgTotal: x.kgTotal, dias: x.dias }));
+          rkDatos = { rows, lotes: [], variedades: [], finIso: hoy, label, ts: Date.now(), cacheKey, modo };
+          rkRenderShell();
+          // Mostrar celebración de la semana al cargar el ranking
+          if (typeof mostrarCelebracionConDatos === "function") setTimeout(() => mostrarCelebracionConDatos("semana"), 200);
+          return;
+        }
     const filas = dias.length ? hallado : [];
     rkDatos = { rows: filas.map((r2, i) => ({ ...r2, posicion: r2.posicion != null ? r2.posicion : i + 1 })), lotes: [], variedades: [], finIso: dias[0], label, ts: Date.now(), cacheKey, modo };
     rkRenderShell();
@@ -2714,24 +2723,24 @@ function iniciarBienvenida() {
     }
 
   // Hook para supervisores
-    function hookSupervisores() {
-      // Interceptar cuando se carga la pestaña supervisores
-      const originalLoadTab = window.loadTab;
-      window.loadTab = async function(name, ...args) {
-        const result = originalLoadTab.apply(this, [name, ...args]);
-      
-        if (name === "supervisores") {
-          // Esperar a que comunidad.js cargue los datos
-          setTimeout(() => {
-            if (window.comunidad && window.comunidad.supervisores) {
-              // La función ya cargó, revisar caché
-              setTimeout(mostrarCelebracionSupervisores, 300);
-            }
-          }, 200);
-        }
-        return result;
-      };
-    }
+      function hookSupervisores() {
+        // Interceptar cuando se carga la pestaña supervisores
+        const originalLoadTab = window.loadTab;
+        window.loadTab = async function(name, ...args) {
+          const result = originalLoadTab.apply(this, [name, ...args]);
+    
+          if (name === "supervisores") {
+            // Esperar a que comunidad.js cargue los datos
+            setTimeout(() => {
+              if (window.comunidad && window.comunidad.supervisores) {
+                // La función ya cargó, revisar caché
+                mostrarCelebracionSupervisores();
+              }
+            }, 200);
+          }
+          return result;
+        };
+      }
 
   // ============================================================
   // RESET AL CAMBIAR DE ÁREA PRINCIPAL
