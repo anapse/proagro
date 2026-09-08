@@ -2317,9 +2317,12 @@ function iniciarBienvenida() {
   if (shNat) { if (navigator.share) shNat.classList.remove("hidden"); shNat.onclick = shareApp; }
   const shCopy = $("#shCopy"); if (shCopy) shCopy.onclick = copiarLink;
   const wSh = $("#welShare"), wOv = $("#welcomeOv");
-  if (wSh) wSh.onclick = (e) => { e.stopPropagation(); shareApp(); cerrarBienvenida(); };
-  if (wOv) wOv.addEventListener("click", () => cerrarBienvenida());  // clic en cualquier lado cierra
-  iniciarBienvenida();
+    if (wSh) wSh.onclick = (e) => { e.stopPropagation(); shareApp(); cerrarBienvenida(); };
+    if (wOv) wOv.addEventListener("click", () => cerrarBienvenida());  // clic en cualquier lado cierra
+    const wX = $("#welX"), wOk = $("#welOk");
+    if (wX) wX.onclick = (e) => { e.stopPropagation(); cerrarBienvenida(); };
+    if (wOk) wOk.onclick = (e) => { e.stopPropagation(); cerrarBienvenida(); };
+    iniciarBienvenida();
 })();
 
 /* ============================================================
@@ -2753,18 +2756,25 @@ function iniciarBienvenida() {
   // INICIALIZACIÓN
   // ============================================================
   function init() {
-    hookRankingPeriodo();
-    hookRankingTabs();
-    hookSupervisores();
+      hookRankingPeriodo();
+      hookRankingTabs();
+      hookSupervisores();
     
-    // Exponer para debugging
-    window.celebracion = {
-      mostrarCosechador: mostrarCelebracionCosechador,
-      mostrarSupervisores: mostrarCelebracionSupervisores,
-      cerrar: cerrarCelebracion,
-      resetFlags: () => { celebShown = { ranking_hoy: false, ranking_semana: false, supervisores: false }; }
-    };
-  }
+      // Exponer funciones globalmente para que cargarRanking y hooks puedan usarlas
+      window.mostrarLoadingRanking = mostrarLoadingRanking;
+      window.mostrarCelebracionConDatos = mostrarCelebracionConDatos;
+      window.abrirCelebracion = abrirCelebracion;
+      window.cerrarCelebracion = cerrarCelebracion;
+      window.mostrarCelebracionSupervisores = mostrarCelebracionSupervisores;
+    
+      // Exponer para debugging
+      window.celebracion = {
+        mostrarCosechador: mostrarCelebracionCosechador,
+        mostrarSupervisores: mostrarCelebracionSupervisores,
+        cerrar: cerrarCelebracion,
+        resetFlags: () => { celebShown = { ranking_hoy: false, ranking_semana: false, supervisores: false }; }
+      };
+    }
 
   // Ejecutar cuando el DOM esté listo
   if (document.readyState === "loading") {
