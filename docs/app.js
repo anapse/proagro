@@ -2711,39 +2711,24 @@ function iniciarBienvenida() {
     }
 
   // Hook para supervisores
-  function hookSupervisores() {
-    // Interceptar cuando se carga la pestaña supervisores
-    const originalLoadTab = window.loadTab;
-    window.loadTab = async function(name, ...args) {
-      const result = originalLoadTab.apply(this, [name, ...args]);
+    function hookSupervisores() {
+      // Interceptar cuando se carga la pestaña supervisores
+      const originalLoadTab = window.loadTab;
+      window.loadTab = async function(name, ...args) {
+        const result = originalLoadTab.apply(this, [name, ...args]);
       
-      if (name === "supervisores") {
-        // Esperar a que comunidad.js cargue los datos
-        setTimeout(() => {
-          if (window.comunidad && window.comunidad.supervisores) {
-            // La función ya cargó, revisar caché
-            setTimeout(mostrarCelebracionSupervisores, 300);
-          }
-        }, 200);
-      }
-      return result;
-    };
-    
-    // También escuchar click en botón de área COMUNIDAD -> SUPERVISORES
-    document.addEventListener("click", (e) => {
-      const btn = e.target.closest("#areas button[data-area='comunidad']");
-      if (btn) {
-        setTimeout(() => {
-          const tabBtn = document.querySelector("#tabs button[data-tab='supervisores']");
-          if (tabBtn) {
-            tabBtn.onclick = () => {
+        if (name === "supervisores") {
+          // Esperar a que comunidad.js cargue los datos
+          setTimeout(() => {
+            if (window.comunidad && window.comunidad.supervisores) {
+              // La función ya cargó, revisar caché
               setTimeout(mostrarCelebracionSupervisores, 300);
-            };
-          }
-        }, 100);
-      }
-    }, true);
-  }
+            }
+          }, 200);
+        }
+        return result;
+      };
+    }
 
   // ============================================================
   // RESET AL CAMBIAR DE ÁREA PRINCIPAL
