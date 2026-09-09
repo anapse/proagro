@@ -798,8 +798,7 @@ body[data-static="1"] header.top{position:relative}
   .celeb-card{transition:none;transform:none;opacity:1}
   .celeb-backdrop{transition:none;opacity:.55}
   .celeb-trophy-img{animation:none}
-  /* Chispas visibles en estático (solo sin animación), no ocultas. */
-  .celeb-sparkle{animation:none;opacity:.85}
+  /* Las chispas y el confeti SÍ se animan en el modal de celebración (efecto breve). */
 }
 
 /* Confeti — capa efímera de celebración por ENCIMA del overlay (z alto), caída en viewport */
@@ -809,10 +808,6 @@ body[data-static="1"] header.top{position:relative}
 @keyframes confettiFall{
   0%{opacity:1;transform:translateY(0) rotate(0deg)}
   100%{opacity:0;transform:translateY(110vh) rotate(720deg)}
-}
-@media(prefers-reduced-motion:reduce){
-  /* Confeti visible en estático: piezas repartidas a media altura (sin caída animada). */
-  .celeb-confetti-piece{animation:none;opacity:.85;transform:translateY(30vh)}
 }
 
 /* Bienvenida: sin botón de cerrar; se cierra con clic en cualquier lado o a los 5 s */

@@ -2389,11 +2389,8 @@ function iniciarBienvenida() {
     container.className = "celeb-confetti";
     document.body.appendChild(container);
 
-    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (prefersReduced) {
-      setTimeout(() => container.remove(), 100);
-      return;
-    }
+    // Se crea y anima SIEMPRE: es un overlay de celebración breve y querido.
+    // (No se cancela por prefers-reduced-motion para que el confeti siempre caiga.)
 
     const pieceCount = 45;
     for (let i = 0; i < pieceCount; i++) {
@@ -2414,7 +2411,7 @@ function iniciarBienvenida() {
       piece.style.background = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
       piece.style.left = (10 + Math.random() * 80) + "vw";
       piece.style.width = piece.style.height = (6 + Math.random() * 10) + "px";
-      piece.style.opacity = "0";
+      piece.style.opacity = "1";                      // visible desde el inicio
       piece.style.animationDelay = (Math.random() * 0.6) + "s";
       piece.style.animationDuration = (2.2 + Math.random() * 1.2) + "s";
       piece.style.transform = `rotate(${Math.random() * 360}deg)`;
@@ -2425,7 +2422,7 @@ function iniciarBienvenida() {
     // Limpiar después de la animación
     setTimeout(() => {
       if (container.parentNode) container.parentNode.removeChild(container);
-    }, 4500);
+    }, 5000);
   }
 
   // ============================================================
