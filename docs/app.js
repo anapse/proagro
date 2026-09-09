@@ -2596,7 +2596,7 @@ function iniciarBienvenida() {
               <div class="celeb-metric"><i>🌾</i><span>${fmtKg(ganador.kgTotal)}</span></div>
             `;
 
-            celebRankBadge.textContent = "";
+            celebRankBadge && (celebRankBadge.textContent = "");
           }
 
   function renderCelebracionSupervisores(resultado) {
@@ -2606,7 +2606,7 @@ function iniciarBienvenida() {
         celebTitle.textContent = "👑 LÍDER";
         celebWinners.innerHTML = "";
         celebMetrics.innerHTML = "";
-        celebRankBadge.textContent = "";
+        celebRankBadge && (celebRankBadge.textContent = "");
         return;
       }
     
@@ -2624,7 +2624,7 @@ function iniciarBienvenida() {
           <div class="celeb-metric"><i>💬</i><span>${fmtNum(comentarios)} comentarios</span></div>
         `;
       
-        celebRankBadge.textContent = "";
+        celebRankBadge && (celebRankBadge.textContent = "");
               } else {
                 const g = ganadores[0];
                 celebTitle.textContent = "👑 ¡LÍDER!";
@@ -2637,7 +2637,7 @@ function iniciarBienvenida() {
                   <div class="celeb-metric"><i>💬</i><span>${fmtNum(g.comentarios)} comentarios</span></div>
                 `;
 
-                celebRankBadge.textContent = "";
+                celebRankBadge && (celebRankBadge.textContent = "");
               }
     }
 
