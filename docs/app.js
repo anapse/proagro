@@ -2689,54 +2689,55 @@ function iniciarBienvenida() {
   const originalRkTabBus = window.rkRenderBus;
   
   // Interceptar botones de período HOY / ESTA SEMANA
-    function hookRankingPeriodo() {
-      document.addEventListener("click", (e) => {
-        const btn = e.target.closest("#rkPerHoy, #rkPerSem");
-        if (!btn) return;
-
-        const modo = btn.id === "rkPerHoy" ? "hoy" : "semana";
-        // Pequeño delay para que rkDatos se actualice
-        setTimeout(() => {
-          if (typeof mostrarCelebracionConDatos === "function") {
-            mostrarCelebracionConDatos(modo);
-          }
-        }, 150);
-      }, true);
-    }
+  // NOTA (data-gated): la celebración NO se dispara aquí con un timer a ciegas.
+  // El click ya llama a cargarRanking(modo), que tras recibir/procesar los datos
+  // reales dispara la celebración en su propio punto (ver cargarRanking).
+  function hookRankingPeriodo() {
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest("#rkPerHoy, #rkPerSem");
+      if (!btn) return;
+      // cargarRanking (bind en rkRenderShell) maneja el flujo completo:
+      //  loading -> fetch -> procesar -> solo ahí abrir celebración.
+    }, true);
+  }
 
   // Hook para tabs del ranking (Ranking / Buscar)
     function hookRankingTabs() {
-      document.addEventListener("click", (e) => {
-        const btn = e.target.closest("#rkTabTop, #rkTabBus");
-        if (!btn) return;
+        document.addEventListener("click", (e) => {
+          const btn = e.target.closest("#rkTabTop, #rkTabBus");
+          if (!btn) return;
 
-        // Solo mostrar al cambiar a la pestaña Ranking (no Buscar)
-        if (btn.id === "rkTabTop") {
-          setTimeout(() => {
-            const modo = rkDatos?.modo || "hoy";
-            if (typeof mostrarCelebracionConDatos === "function") {
-              mostrarCelebracionConDatos(modo);
+          // Solo al volver a la pestaña "Ranking" (no a "Buscar") y SOLO si ya hay
+          // datos de ranking procesados en memoria (rkDatos). Nunca a ciegas por timer.
+          if (btn.id === "rkTabTop") {
+            const hayDatos = rkDatos && Array.isArray(rkDatos.rows) && rkDatos.rows.length > 0;
+            if (hayDatos && typeof mostrarCelebracionConDatos === "function") {
+              mostrarCelebracionConDatos(rkDatos.modo || "hoy");
             }
-          }, 100);
-        }
-      }, true);
-    }
+          }
+        }, true);
+      }
 
   // Hook para supervisores
       function hookSupervisores() {
-        // Interceptar cuando se carga la pestaña supervisores
+        // Interceptar cuando se carga la pestaña supervisores.
+        // Data-gated: la celebración se dispara SOLO después de que comunidad.js
+        // terminó de cargar los datos (await del resultado de loadTab), NUNCA
+        // mediante un timer a ciegas antes de tener datos.
         const originalLoadTab = window.loadTab;
         window.loadTab = async function(name, ...args) {
-          const result = originalLoadTab.apply(this, [name, ...args]);
-    
+          const result = originalLoadTab.apply(this, [name, ...args]); // promise de cargar la tab
+
           if (name === "supervisores") {
-            // Esperar a que comunidad.js cargue los datos
-            setTimeout(() => {
-              if (window.comunidad && window.comunidad.supervisores) {
-                // La función ya cargó, revisar caché
+            // Esperar a que comunidad.js termine de cargar los supervisores.
+            try { await result; } catch (err) { /* la tab ya muestra su error */ }
+            // Un solo requestAnimationFrame post-render para que el panel esté presente.
+            requestAnimationFrame(() => {
+              // Verificar que de verdad llegaron datos antes de celebrar.
+              if (typeof mostrarCelebracionSupervisores === "function") {
                 mostrarCelebracionSupervisores();
               }
-            }, 200);
+            });
           }
           return result;
         };

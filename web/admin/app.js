@@ -185,7 +185,7 @@ async function verSupervisores(sec) {
     <td>${s.activo ? '<span class="chip" style="color:#4ade80">activo</span>' : '<span class="chip" style="color:var(--muted)">inactivo</span>'}</td>
     <td class="num">${s.likes || 0}</td><td class="num">${s.dislikes || 0}</td><td class="num">${s.comentarios || 0}</td>
     <td style="white-space:nowrap">${USER.role_level <= 1 ? `
-      <button class="btn small" onclick="ADM.editarSup(${s.id}, ${JSON.stringify(esc(s.nombre))}, ${JSON.stringify(esc(s.cargo || "Supervisor/a"))}, ${s.activo})">✏️</button>
+      <button class="btn small" onclick="ADM.editarSup(${s.id}, '${esc(s.nombre)}', '${esc(s.cargo || "Supervisor/a")}', ${s.activo})">✏️</button>
       <button class="btn small" onclick="ADM.toggleSup(${s.id}, ${s.activo ? "false" : "true"})">${s.activo ? "⏸" : "▶️"}</button>` : ""}
     </td></tr>`).join("");
   sec.innerHTML = `<h2>👷 SUPERVISORES</h2>
